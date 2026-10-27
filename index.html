@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self';"
+    />
+    <title>NPF Management System</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-logo" src="src/logo.png" alt="NPF Microfinance Bank" />
+          <div>
+            <div class="brand-name">NPF MANAGEMENT SYSTEM</div>
+            <div class="brand-subtitle">LOAN DOCUMENT STUDIO</div>
+          </div>
+        </div>
+        <div class="topbar-note"><span class="status-dot"></span> Documents stay on this device</div>
+      </header>
+
+      <main>
+        <section class="intro">
+          <div class="eyebrow">CREDIT OPERATIONS</div>
+          <h1>Prepare loan documents</h1>
+          <p>Enter the facility details once, choose your templates, and export a ready-to-edit Word document.</p>
+        </section>
+
+        <form id="loan-form">
+          <section class="panel document-panel">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">01 / DOCUMENTS</div>
+                <h2>Choose what to include</h2>
+              </div>
+              <button class="text-button" type="button" id="select-all">Select all</button>
+            </div>
+            <div class="template-grid">
+              <label class="template-option">
+                <input type="checkbox" name="templates" value="appraisal" checked />
+                <span class="checkmark"></span>
+                <span class="template-copy"><strong>Loan appraisal</strong><small>Credit appraisal and facility terms</small></span>
+                <span class="template-tag">01</span>
+              </label>
+              <label class="template-option">
+                <input type="checkbox" name="templates" value="circ" checked />
+                <span class="checkmark"></span>
+                <span class="template-copy"><strong>C.I.R.C. comment sheet</strong><small>Branch manager review sheet</small></span>
+                <span class="template-tag">02</span>
+              </label>
+              <label class="template-option">
+                <input type="checkbox" name="templates" value="offer" checked />
+                <span class="checkmark"></span>
+                <span class="template-copy"><strong>Offer letter</strong><small>Customer facility offer and conditions</small></span>
+                <span class="template-tag">03</span>
+              </label>
+              <label class="template-option">
+                <input type="checkbox" name="templates" value="keyfact" checked />
+                <span class="checkmark"></span>
+                <span class="template-copy"><strong>Key Facts Statement</strong><small>Loan cost, repayment, fees and charges</small></span>
+                <span class="template-tag">04</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">02 / CUSTOMER</div>
+                <h2>Customer details</h2>
+              </div>
+              <span class="required-note">* Required fields</span>
+            </div>
+            <div class="form-grid">
+              <label class="field span-2"><span>Customer full name *</span><input name="customerName" required placeholder="e.g. Ada Nwosu" /></label>
+              <label class="field"><span>Gender *</span><select name="customerGender" required><option value="">Select gender</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
+              <label class="field"><span>Phone number *</span><input name="customerPhone" required type="tel" placeholder="0800 000 0000" /></label>
+              <label class="field"><span>BVN *</span><input name="customerBvn" required inputmode="numeric" /></label>
+              <label class="field"><span>NIN *</span><input name="customerNin" required inputmode="numeric" /></label>
+              <label class="field"><span>AP / Force number *</span><input name="customerForceNumber" required /></label>
+              <label class="field"><span>Date of birth *</span><input name="customerDob" required type="date" /></label>
+              <label class="field"><span>Enlistment date *</span><input name="enlistmentDate" required type="date" /></label>
+              <label class="field"><span>Retirement date *</span><input name="customerRetirementDate" required type="date" /></label>
+              <label class="field"><span>Monthly salary (₦) *</span><input name="customerSalary" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
+              <label class="field"><span>Account number *</span><input name="customerAccount" required /></label>
+              <label class="field"><span>Customer ID *</span><input name="customerId" required /></label>
+              <label class="field span-2"><span>Office / service address *</span><input name="customerAddress" required /></label>
+              <label class="field"><span>Loan amount requested (₦) *</span><input name="loanAmount" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
+              <label class="field"><span>Recommended amount (₦) *</span><input name="recommendedAmount" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" aria-describedby="product-category" /></label>
+              <label class="field"><span>Loan recommended? *</span><select name="loanRecommended" required><option value="Yes">Yes</option><option value="No">No</option></select></label>
+              <label class="field"><span>Loan product *</span><select name="loanProduct" required><option value="amount-based">Based on recommended amount</option><option value="Sharp Sharp">Sharp Sharp</option></select><small id="product-category" class="inline-hint">Recommended amount determines Term Loan or Other Micro Loan.</small></label>
+              <label class="field"><span>Loan purpose *</span><input name="purpose" required placeholder="What will the facility be used for?" /></label>
+              <label class="field"><span>Loan duration (months) *</span><input name="durationMonths" required type="number" min="1" max="24" value="24" /></label>
+              <label class="field"><span>Loan cycle *</span><input name="loanCycle" required type="number" min="1" value="1" /></label>
+              <label class="field"><span>MSS / salary source *</span><input name="mss" required /></label>
+              <label class="field"><span>Date applied *</span><input name="dateApplied" required type="date" /></label>
+              <label class="field"><span>Appraisal / offer date *</span><input name="documentDate" required type="date" /></label>
+              <label class="field"><span>Drawdown date *</span><input name="drawdownDate" required type="date" /></label>
+              <label class="field"><span>Monthly repayment (₦)<small class="inline-hint">Leave blank to estimate</small></span><input name="repayment" type="text" inputmode="decimal" data-currency placeholder="e.g. 55,000.00" /></label>
+              <label class="field"><span>Appraising officer *</span><select name="appraisingOfficer" required><option value="Adigwe Patrick">Adigwe Patrick</option><option value="Obilo Tochi">Obilo Tochi</option><option value="Obiageli Everngeline">Obiageli Everngeline</option></select></label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">03 / GUARANTORS</div>
+                <h2>Guarantor details</h2>
+              </div>
+              <button class="text-button" type="button" id="add-guarantor">＋ Add guarantor</button>
+            </div>
+            <p class="section-description">Add at least one guarantor. You can add more if the facility requires them.</p>
+            <div id="guarantors" class="guarantor-list"></div>
+          </section>
+
+          <div class="form-footer">
+            <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+            <button class="primary-button" id="generate-button" type="submit">
+              <span>Generate Word document</span><span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+        <footer>NPF Management System <span>•</span> Creates editable .docx files</footer>
+      </main>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "npf-management-system",
+  "version": "1.0.0",
+  "description": "Desktop app for preparing loan appraisal and offer documents",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test-document.js"
+  },
+  "dependencies": {
+    "docx": "^9.5.1"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}
