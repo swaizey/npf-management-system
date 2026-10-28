@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self';"
+    />
+    <title>Loan Repayment Calculator | NPF Management System</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-logo" src="src/logo.png" alt="NPF Microfinance Bank" />
+          <div>
+            <div class="brand-name">NPF MANAGEMENT SYSTEM</div>
+            <div class="brand-subtitle">LOAN DOCUMENT STUDIO</div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a class="topbar-link" href="index.html">Document studio <span aria-hidden="true">→</span></a>
+          <div class="topbar-note"><span class="status-dot"></span> Documents stay on this device</div>
+        </div>
+      </header>
+
+      <main class="calculator-main">
+        <section class="intro">
+          <div class="eyebrow">CREDIT OPERATIONS</div>
+          <h1>Loan repayment calculator</h1>
+          <p>Simulate repayments independently, without entering appraisal or customer details.</p>
+        </section>
+
+        <form id="calculator-form" class="panel calculator-panel">
+          <div class="section-heading">
+            <div>
+              <div class="step-label">REPAYMENT SIMULATION</div>
+              <h2>Enter loan details</h2>
+            </div>
+          </div>
+          <div class="calculator-form">
+            <label class="field">
+              <span>Loan amount (₦)</span>
+              <input id="loan-amount" name="amount" type="text" inputmode="decimal" data-currency required placeholder="e.g. 1,000,000.00" />
+            </label>
+            <label class="field">
+              <span>Loan product</span>
+              <select id="loan-product" name="product" required>
+                <option value="Term Loan">Term Loan</option>
+                <option value="Other Micro Loan">Other Micro Loan</option>
+                <option value="Sharp Sharp">Sharp Sharp</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Duration (months)</span>
+              <input id="loan-duration" name="duration" type="number" min="1" max="24" value="12" required />
+            </label>
+            <label class="field">
+              <span>Loan start date</span>
+              <input id="loan-start-date" name="startDate" type="date" required />
+            </label>
+            <p class="calculator-hint" id="product-hint">Term Loan: 26% per annum on the original principal; interest varies by days in each period. Maximum 24 months.</p>
+            <p class="calculator-error" id="calculator-error" role="alert" hidden></p>
+            <button class="primary-button calculator-submit" type="submit">
+              <span>Simulate repayment</span><span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+
+        <section id="calculator-results" class="panel calculator-results" aria-live="polite" hidden>
+          <div class="section-heading">
+            <div>
+              <div class="step-label">SIMULATION RESULTS</div>
+              <h2 id="result-title">Repayment summary</h2>
+            </div>
+          </div>
+          <div class="calculator-summary">
+            <div class="summary-item"><span>Average monthly repayment</span><strong id="average-repayment"></strong></div>
+            <div class="summary-item"><span>Total interest</span><strong id="total-interest"></strong></div>
+            <div class="summary-item"><span>Total repayment</span><strong id="total-repayment"></strong></div>
+          </div>
+          <h3 class="schedule-heading">Estimated repayment schedule</h3>
+          <div class="schedule-scroll">
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Due date</th>
+                  <th scope="col">Principal</th>
+                  <th scope="col">Interest</th>
+                  <th scope="col">Payment</th>
+                  <th scope="col">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="schedule-body"></tbody>
+            </table>
+          </div>
+          <p class="calculator-disclaimer">The repayment schedule is calculated from the selected loan start date. Estimates exclude fees and charges shown in a Key Facts Statement. Actual terms and repayments may differ.</p>
+        </section>
+
+        <footer>NPF Management System <span>•</span> Independent repayment estimate</footer>
+      </main>
+    </div>
+    <script src="src/loan-calculations.js"></script>
+    <script src="loan-calculator.js"></script>
+  </body>
+</html>

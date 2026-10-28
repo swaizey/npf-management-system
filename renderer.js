@@ -98,9 +98,6 @@ function validateLoanRules(customer) {
   if (!Number.isInteger(customer.durationMonths) || customer.durationMonths < 1 || customer.durationMonths > maximumMonths) {
     return `${customer.loanProduct} duration must be between 1 and ${maximumMonths} months.`;
   }
-  if (customer.repayment !== null && (!Number.isFinite(customer.repayment) || customer.repayment <= 0)) {
-    return "Monthly repayment must be greater than zero, or leave it blank to estimate.";
-  }
   return "";
 }
 
@@ -137,8 +134,7 @@ function collectPayload() {
     dateApplied: fieldValue("dateApplied"),
     documentDate: fieldValue("documentDate"),
     drawdownDate: fieldValue("drawdownDate"),
-    appraisingOfficer: fieldValue("appraisingOfficer"),
-    repayment: amountValue("repayment")
+    appraisingOfficer: fieldValue("appraisingOfficer")
   };
 
   const guarantorCards = [...guarantorList.querySelectorAll(".guarantor-card")];

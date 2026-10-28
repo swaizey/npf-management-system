@@ -40,9 +40,14 @@ ipcMain.handle("documents:save", async (_event, payload) => {
     throw new Error("Select at least one document to generate.");
   }
 
+  const safeCustomerName = String(customer.name || "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  const defaultFileName = `${safeCustomerName || "Loan Documents"} - Loan Documents.docx`;
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: "Save loan documents",
-    defaultPath: "Loan Documents.docx",
+    defaultPath: defaultFileName,
     filters: [{ name: "Word document", extensions: ["docx"] }]
   });
 

@@ -1,47 +1,35 @@
+const { BorderStyle, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } = require("docx");
 const { addParagraph, centeredTitle, displayDate, heading, labelValue, money } = require("./document-utils");
+const { calculateKeyFacts } = require("./loan-calculations");
 
-function roundCurrency(amount) {
-  return Math.round((amount + Number.EPSILON) * 100) / 100;
+function informationBox(title, entries) {
+  const border = { style: BorderStyle.SINGLE, size: 8, color: "9BA9A4" };
+  return new TableCell({
+    width: { size: 5000, type: WidthType.DXA },
+    borders: {
+      top: border,
+      bottom: border,
+      left: border,
+      right: border
+    },
+    margins: { top: 140, bottom: 140, left: 180, right: 180 },
+    children: [
+      new Paragraph({
+        children: [new TextRun({ text: title, bold: true, size: 24, color: "153B36" })],
+        spacing: { before: 0, after: 140 },
+        keepNext: true
+      }),
+      ...entries
+    ]
+  });
 }
 
-function calculateKeyFacts(customer) {
-  const principal = Number(customer.recommendedAmount);
-  const durationMonths = Number(customer.durationMonths);
-  const sharpSharp = customer.loanProduct === "Sharp Sharp";
-  const interestRate = sharpSharp ? 0.04 : 0.26 / 12;
-  const interest = roundCurrency(principal * interestRate * durationMonths);
-  const totalRepayment = roundCurrency(principal + interest);
-  const insurance = roundCurrency(principal * 0.015);
-  const managementFee = sharpSharp ? 0 : roundCurrency(principal * 0.01);
-  const managementFeeVat = roundCurrency(managementFee * 0.017);
-  const creditBureau = 1000;
-  const stampDuty = 1000;
-  const seal = 50;
-  const vatOnCrc = 75;
-  const lenderCharges = roundCurrency(insurance + managementFee + managementFeeVat);
-  const thirdPartyCharges = roundCurrency(creditBureau + stampDuty + seal + vatOnCrc);
-  const totalCharges = roundCurrency(lenderCharges + thirdPartyCharges);
-
-  return {
-    principal,
-    durationMonths,
-    interestRate,
-    rateDescription: sharpSharp ? "4% per month" : "26% per annum",
-    interest,
-    totalRepayment,
-    repaymentAmount: roundCurrency(totalRepayment / durationMonths),
-    insurance,
-    managementFee,
-    managementFeeVat,
-    creditBureau,
-    stampDuty,
-    seal,
-    vatOnCrc,
-    lenderCharges,
-    thirdPartyCharges,
-    totalCharges,
-    totalCostOfCredit: roundCurrency(interest + totalCharges)
-  };
+function sideBySideBoxes(leftBox, rightBox) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [5000, 5000],
+    rows: [new TableRow({ children: [leftBox, rightBox] })]
+  });
 }
 
 function createKeyFacts(customer) {
@@ -52,31 +40,39 @@ function createKeyFacts(customer) {
     centeredTitle("KEY FACTS STATEMENT"),
     addParagraph("This statement summarizes the key information and costs of the loan for comparison purposes."),
     labelValue("DISCLOSURE DATE", disclosureDate),
-    heading("The loan"),
-    labelValue("Loan amount", money(facts.principal)),
-    labelValue("Tenor", `${facts.durationMonths} months`),
-    labelValue("Interest rate", facts.rateDescription + " flat"),
-    heading("Total cost of consumer credit"),
-    labelValue("Total interest charges", money(facts.interest)),
-    labelValue("Total amount to be repaid (principal + interest)", money(facts.totalRepayment)),
-    labelValue("Repayment amount", `${money(facts.repaymentAmount)} monthly for ${facts.durationMonths} months`),
-    labelValue("Total fees and charges (A + B)", money(facts.totalCharges)),
-    labelValue("Total cost of credit (interest + all charges)", money(facts.totalCostOfCredit)),
+    sideBySideBoxes(
+      informationBox("The loan", [
+        labelValue("Loan amount", money(facts.principal)),
+        labelValue("Tenor", `${facts.durationMonths} months`),
+        labelValue("Interest rate", facts.rateDescription)
+      ]),
+      informationBox("Total cost of consumer credit", [
+        labelValue("Total interest charges", money(facts.interest)),
+        labelValue("Total amount to be repaid (principal + interest)", money(facts.totalRepayment)),
+        labelValue("Average repayment amount", `${money(facts.repaymentAmount)} over ${facts.durationMonths} monthly instalments`),
+        labelValue("Total fees and charges (A + B)", money(facts.totalCharges)),
+        labelValue("Total cost of credit (interest + all charges)", money(facts.totalCostOfCredit))
+      ])
+    ),
     heading("Fees and charges"),
-    addParagraph("(A) Lender fees"),
-    labelValue("Insurance (1.5% of loan amount)", money(facts.insurance)),
-    ...(customer.loanProduct === "Sharp Sharp" ? [] : [
-      labelValue("Management fee (1% of loan amount)", money(facts.managementFee)),
-      labelValue("VAT on management fee (1.7% of management fee)", money(facts.managementFeeVat))
-    ]),
-    labelValue("Total lender fees (A)", money(facts.lenderCharges)),
-    addParagraph("(B) Third-party fees and charges"),
-    labelValue("Credit Bureau", money(facts.creditBureau)),
-    labelValue("Stamp duty", money(facts.stampDuty)),
-    labelValue("Seal", money(facts.seal)),
-    labelValue("VAT on CRC", money(facts.vatOnCrc)),
-    labelValue("Total third-party fees (B)", money(facts.thirdPartyCharges)),
-    labelValue("Total fees and charges (A + B)", money(facts.totalCharges)),
+    sideBySideBoxes(
+      informationBox("(A) Lender fees", [
+        labelValue("Insurance (1.5% of loan amount)", money(facts.insurance)),
+        ...(customer.loanProduct === "Sharp Sharp" ? [] : [
+          labelValue("Management fee (1% of loan amount)", money(facts.managementFee)),
+          labelValue("VAT on management fee (1.7% of management fee)", money(facts.managementFeeVat))
+        ]),
+        labelValue("Total lender fees (A)", money(facts.lenderCharges))
+      ]),
+      informationBox("(B) Third-party fees and charges", [
+        labelValue("Credit Bureau", money(facts.creditBureau)),
+        labelValue("Stamp duty", money(facts.stampDuty)),
+        labelValue("Seal", money(facts.seal)),
+        labelValue("VAT on CRC", money(facts.vatOnCrc)),
+        labelValue("Total third-party fees (B)", money(facts.thirdPartyCharges)),
+        labelValue("Total fees and charges (A + B)", money(facts.totalCharges))
+      ])
+    ),
     addParagraph("Fees and charges are shown separately from the total repayment of principal and interest.")
   ];
 }

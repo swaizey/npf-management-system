@@ -18,7 +18,12 @@ const {
   money,
   separatorLine
 } = require("./document-utils");
-const { calculateKeyFacts, createKeyFacts } = require("./key-fact");
+const {
+  calculateKeyFacts,
+  calculateLoanSchedule,
+  calculateMonthlyRepayment
+} = require("./loan-calculations");
+const { createKeyFacts } = require("./key-fact");
 const { createOfferLetter } = require("./offer-letter");
 
 function resolveLoanProduct(customer) {
@@ -36,6 +41,12 @@ function validateLoanDetails(customer) {
   if (!Number.isFinite(Number(customer.recommendedAmount)) || Number(customer.recommendedAmount) <= 0) {
     return "Enter a valid recommended amount.";
   }
+  const drawdownDate = new Date(`${customer.drawdownDate}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(customer.drawdownDate || "")
+      || Number.isNaN(drawdownDate.getTime())
+      || drawdownDate.toISOString().slice(0, 10) !== customer.drawdownDate) {
+    return "Enter a valid drawdown date.";
+  }
 
   const product = resolveLoanProduct(customer);
   if (product === "Sharp Sharp"
@@ -48,16 +59,7 @@ function validateLoanDetails(customer) {
       || customer.durationMonths > maximumMonths) {
     return `${product} duration must be between 1 and ${maximumMonths} months.`;
   }
-  if (customer.repayment != null
-      && (!Number.isFinite(customer.repayment) || customer.repayment <= 0)) {
-    return "Monthly repayment must be greater than zero, or leave it blank to estimate.";
-  }
   return "";
-}
-
-function calculateMonthlyRepayment(amount, durationMonths, product) {
-  const monthlyRate = product === "Sharp Sharp" ? 0.04 : 0.26 / 12;
-  return (amount * (1 + monthlyRate * durationMonths)) / durationMonths;
 }
 
 function guarantorTable(guarantors) {
@@ -109,6 +111,7 @@ function createAppraisal(customer, guarantors, repayment, appraisingOfficer) {
     labelValue("DATE", displayDocumentDate(customer.documentDate), true),
     separatorLine(),
     addParagraph(`${customer.name} is a current account holder with the account number ${accountNumber} and Customer ID ${customer.id}. The mandate is complete with relatively satisfactory operations. ${possessivePronoun} BVN is ${customer.bvn}; phone number: ${customer.phone}; NIN: ${customer.nin}; date of birth: ${displayDate(customer.dob)}.`),
+    labelValue("CUSTOMER ADDRESS", customer.address),
     addParagraph(`${subjectPronoun} is a serving member of ${customer.mss}, was enlisted on ${displayDate(customer.enlistmentDate)} and is due for retirement on ${displayDate(customer.retirementDate)}.`),
     addParagraph(`${subjectPronoun} has approached the bank for a loan of ${money(customer.loanAmount)} for the purpose of ${customer.purpose}.`),
     addParagraph(Number(customer.loanCycle) > 1
@@ -117,24 +120,27 @@ function createAppraisal(customer, guarantors, repayment, appraisingOfficer) {
     addParagraph(`The loan if granted will run for ${customer.durationMonths} months and will be repaid through ${possessivePronoun.toLowerCase()} monthly salary of ${money(customer.salary)} which will be received directly from ${customer.mss}.`),
     addParagraph(`As part of security for the loan, ${subjectPronoun.toLowerCase()} has also brought ${guarantors.length} guarantor${guarantors.length > 1 ? "s" : ""} that operate salary current accounts with the bank, details as follows:`),
     guarantorTable(guarantors),
-    addParagraph(`The anticipated income from the loan is ${money(Math.max(0, (repayment * customer.durationMonths) - customer.recommendedAmount))} apart from other charges.`),
+    addParagraph(`The anticipated income from the loan is ${money(keyFacts.interest)} apart from other charges.`),
     addParagraph("In order to boost our loan portfolio and profit, I hereby recommend the following terms and conditions for consideration and approval."),
     labelValue("LENDER", "NPF Microfinance Bank PLC"),
     labelValue("BORROWER", customer.name),
     labelValue("FACILITY", customer.loanProduct),
     labelValue("PURPOSE", customer.purpose),
     labelValue("AMOUNT RECOMMENDED", money(customer.recommendedAmount)),
-    labelValue("REPAYMENT", `Monthly repayment of ${money(repayment)}`),
+    labelValue("REPAYMENT", customer.loanProduct === "Sharp Sharp"
+      ? `Monthly repayment of ${money(repayment)}`
+      : `Fixed monthly principal of ${money(keyFacts.schedule.installments[0].principal)} plus interest at 26% per annum; see repayment schedule`),
     labelValue("TENOR", `${customer.durationMonths} Months`),
     labelValue("EXPIRING DATE", `${customer.durationMonths} Months after drawdown`),
-    labelValue("INTEREST RATE", `${customer.loanProduct === "Sharp Sharp" ? "4% per month" : "26% P.A"} flat (subject to review in line with changes in money market rate and bank's policy as may occur from time to time without prior notice)`),
+    labelValue("INTEREST RATE", `${customer.loanProduct === "Sharp Sharp" ? "4% flat per month (48% per annum)" : "26% per annum, calculated daily on the original principal"} (subject to review in line with changes in money market rate and bank's policy as may occur from time to time without prior notice)`),
     ...(customer.loanProduct === "Sharp Sharp" ? [] : [
       labelValue("MGT/PROCESSING FEE", `1% of loan amount: ${money(keyFacts.managementFee)}`),
       labelValue("VAT ON MANAGEMENT FEE", `1.7% of management fee: ${money(keyFacts.managementFeeVat)}`)
     ]),
     labelValue("INSURANCE FEE", "1.5% flat upfront"),
     labelValue("CREDIT BUREAU FEE", "₦1000"),
-    labelValue("SECURITY", addParagraph("(1) Remittance of monthly salary through the bank. ")),
+    labelValue("SECURITY", "(1) Remittance of monthly salary through the bank."),
+    addParagraph("(2) Personal Guarantor"),
     ...guarantors.map((guarantor, index) => labelValue(
       `${index + 1}`,
       `${guarantor.name} AP/FN/NO: ${guarantor.forceNumber || ""}  SAL. ${money(guarantor.salary)}, Account Number: ${guarantor.account}`
@@ -164,9 +170,18 @@ function createLoanDocument(payload, templates) {
   const validationError = validateLoanDetails(customer);
   if (validationError) throw new Error(validationError);
   const appraisingOfficer = payload.appraisingOfficer || "Adigwe Patrick";
-  const repayment = customer.repayment > 0
-    ? customer.repayment
-    : calculateMonthlyRepayment(customer.recommendedAmount, customer.durationMonths, customer.loanProduct);
+  const repayment = calculateMonthlyRepayment(
+    customer.recommendedAmount,
+    customer.durationMonths,
+    customer.loanProduct,
+    customer.drawdownDate
+  );
+  const schedule = calculateLoanSchedule(
+    customer.recommendedAmount,
+    customer.durationMonths,
+    customer.loanProduct,
+    customer.drawdownDate
+  );
   const children = [];
 
   templates.forEach((template, index) => {
@@ -184,7 +199,7 @@ function createLoanDocument(payload, templates) {
         addParagraph("SIGN: ________________________________________")
       );
     }
-    if (template === "offer") children.push(...createOfferLetter(customer, guarantors, repayment, appraisingOfficer));
+    if (template === "offer") children.push(...createOfferLetter(customer, guarantors, repayment, appraisingOfficer, schedule));
     if (template === "keyfact") children.push(...createKeyFacts(customer));
     if (index < templates.length - 1) children.push(new Paragraph({ children: [new PageBreak()] }));
   });

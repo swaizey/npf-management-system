@@ -1,4 +1,4 @@
-const { Paragraph, TextRun } = require("docx");
+const { Paragraph, Table, TableCell, TableRow, TextRun, WidthType } = require("docx");
 const {
   addParagraph,
   amountInWords,
@@ -6,29 +6,11 @@ const {
   displayDate,
   heading,
   labelValue,
-  localDateValue,
   money,
   separatorLine
 } = require("./document-utils");
 const { calculateKeyFacts } = require("./key-fact");
-
-function addDays(value, days) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-function addMonths(value, months) {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
-  const date = new Date(value);
-  const day = date.getDate();
-  date.setDate(1);
-  date.setMonth(date.getMonth() + months);
-  const finalDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  date.setDate(Math.min(day, finalDay));
-  return date;
-}
+const { calculateOfferLetterValues, formatScheduleDate } = require("./loan-calculations");
 
 function displayOfferDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
@@ -40,15 +22,48 @@ function displayOfferDate(date) {
   return `${day}${suffix} ${month}, ${date.getFullYear()}`;
 }
 
-function createOfferLetter(customer, guarantors, repayment, appraisingOfficer) {
+function repaymentScheduleTable(schedule) {
+  const headers = ["Payment", "Due date", "Opening balance", "Principal", "Interest", "Total payment", "Closing balance"];
+  const widths = [500, 1400, 1600, 1300, 1300, 1500, 1700];
+  const rows = [
+    new TableRow({
+      tableHeader: true,
+      children: headers.map((text, index) => new TableCell({
+        width: { size: widths[index], type: WidthType.DXA },
+        children: [new Paragraph({
+          children: [new TextRun({ text, bold: true, size: 16, color: "000000" })],
+          spacing: { before: 50, after: 50 }
+        })]
+      }))
+    }),
+    ...schedule.installments.map((installment) => new TableRow({
+      children: [
+        String(installment.installment),
+        formatScheduleDate(installment.dueDate),
+        money(installment.openingPrincipal),
+        money(installment.principal),
+        money(installment.interest),
+        money(installment.total),
+        money(installment.outstandingPrincipal)
+      ].map((value, index) => new TableCell({
+        width: { size: widths[index], type: WidthType.DXA },
+        children: [new Paragraph({
+          children: [new TextRun({ text: value, size: 16, color: "000000" })],
+          spacing: { before: 40, after: 40 }
+        })]
+      }))
+    }))
+  ];
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: widths,
+    rows
+  });
+}
+
+function createOfferLetter(customer, guarantors, repayment, appraisingOfficer, schedule) {
   const facts = calculateKeyFacts(customer);
-  const approvedAmount = Number(customer.recommendedAmount);
-  const managementFee = approvedAmount * 0.01;
-  const managementFeeVat = managementFee * 0.075;
-  const mandatorySavings = approvedAmount * 0.03;
-  const insurance = approvedAmount * 0.015;
-  const effectiveDate = addDays(customer.documentDate, 30);
-  const expiryDate = addMonths(effectiveDate, customer.durationMonths);
+  const values = calculateOfferLetterValues(customer);
   const offerDate = new Date(`${customer.documentDate}T00:00:00`);
   const applicationDate = new Date(`${customer.dateApplied}T00:00:00`);
   const female = customer.gender === "Female";
@@ -58,8 +73,8 @@ function createOfferLetter(customer, guarantors, repayment, appraisingOfficer) {
     ? guarantors.map((guarantor) => `${guarantor.name} (Account Number: ${guarantor.account})`).join("; ")
     : "No guarantor details provided";
   const interestRate = customer.loanProduct === "Sharp Sharp"
-    ? "4% Flat per Month (subject to review in line with changes in the money market rate and bank policy as may occur from time to time)."
-    : "26% Flat per Annum (subject to review in line with the changes in the money market rate and bank policy as may occur from time to time).";
+    ? "4% Flat per Month (48% per annum; subject to review in line with changes in the money market rate and bank policy as may occur from time to time)."
+    : "26% per annum, calculated daily on the original principal using the actual days in each repayment period (subject to review in line with the changes in the money market rate and bank policy as may occur from time to time).";
   const variableRateText = "Changes in the prevailing market rates and conditions during the tenor of this agreement may alter the rates agreed upon by the parties. Any such changes will be effected 10 days after the Borrower has been duly notified of these changes. Note that the Bank is not obliged to disclose the basis on which the assessment was made.";
   const content = [
     centeredTitle(title),
@@ -75,20 +90,27 @@ function createOfferLetter(customer, guarantors, repayment, appraisingOfficer) {
     labelValue("Contact details of the Borrower", customer.address),
     labelValue("Credit/Facility type", customer.loanProduct),
     labelValue("Purpose", `To enable ${female ? "her" : "him"} to ${purpose}`),
-    labelValue("Amount approved", `${money(approvedAmount)} (${amountInWords(approvedAmount)})`),
+    labelValue("Amount approved", `${money(values.approvedAmount)} (${amountInWords(values.approvedAmount)})`),
     labelValue("Collateral/Security", `Salary; Guarantor(s): ${guarantorDetails}`),
     labelValue("Tenor", `${customer.durationMonths} months`),
     labelValue("Interest rate", interestRate),
-    labelValue("Effective Date", effectiveDate ? displayDate(localDateValue(effectiveDate)) : "To be confirmed"),
-    labelValue("Expiry Date", expiryDate ? displayDate(localDateValue(expiryDate)) : "To be confirmed"),
+    labelValue("Effective Date", values.effectiveDate ? displayDate(values.effectiveDate) : "To be confirmed"),
+    labelValue("Expiry Date", values.expiryDate ? displayDate(values.expiryDate) : "To be confirmed"),
     labelValue("Variable rate Information", variableRateText),
     heading("Fees and Commissions"),
-    addParagraph(`i. Management fee 1% (${money(managementFee)})`),
-    addParagraph(`ii. 3% Mandatory Saving Deposit (${money(mandatorySavings)})`),
+    addParagraph(`i. Management fee 1% (${money(values.managementFee)})`),
+    addParagraph(`ii. 3% Mandatory Saving Deposit (${money(values.mandatorySavings)})`),
     addParagraph(`iii. Credit Bureau Report fee ${money(facts.creditBureau)}`),
-    addParagraph(`iv. VAT 7.5% of Management Processing fee (${money(managementFeeVat)})`),
-    labelValue("Credit life Insurance Premium", `1.5% (${money(insurance)}) of Amount approved`),
-    labelValue("Repayment", `Monthly principal and interest ${money(repayment)}`),
+    addParagraph(`iv. VAT 7.5% of Management Processing fee (${money(values.managementFeeVat)})`),
+    labelValue("Credit life Insurance Premium", `1.5% (${money(values.insurance)}) of Amount approved`),
+    labelValue("Repayment", customer.loanProduct === "Sharp Sharp"
+      ? `Monthly principal and interest ${money(repayment)}`
+      : `Fixed monthly principal of ${money(schedule.installments[0].principal)} plus interest calculated on the original principal; first payment is due one month after drawdown on ${displayDate(schedule.firstPaymentDate)}.`),
+    heading("Repayment Schedule"),
+    ...(customer.loanProduct === "Sharp Sharp" ? [] : [
+      addParagraph("Interest for each period is calculated on the original principal: original principal × 26% × actual days in the period ÷ 365. The interest amount changes with the number of days in each period; monthly principal payments remain fixed.")
+    ]),
+    repaymentScheduleTable(schedule),
     heading("Early Liquidation terms"),
     addParagraph("All outstanding sums of the Facility (whether principal, interest or any other monies owing to the Bank) shall be repayable at any time forthwith on demand."),
     addParagraph("The Bank is at liberty to recall the facility if the project fails to comply with the Environmental and Social policy of the Bank."),

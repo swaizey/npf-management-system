@@ -24,8 +24,7 @@ module.exports = {
       mss: "NPF",
       dateApplied: "2026-10-23",
       documentDate: "2026-10-25",
-      drawdownDate: "2026-10-25",
-      repayment: 49000
+      drawdownDate: "2026-10-25"
     },
     guarantors: [
       {
