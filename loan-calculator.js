@@ -27,8 +27,8 @@ function updateProductRules() {
   const isSharpSharp = productInput.value === "Sharp Sharp";
   durationInput.max = isSharpSharp ? "12" : "24";
   productHint.textContent = isSharpSharp
-    ? "Sharp Sharp: 4% flat per month; amount ₦100,000–₦1,000,000; maximum 12 months."
-    : `${productInput.value}: 26% per annum on the original principal; interest varies by days in each period. Maximum 24 months.`;
+    ? "Sharp Sharp: 48% per annum (4% monthly equivalent), calculated daily on the original principal; amount ₦100,000–₦1,000,000; maximum 12 months."
+    : `${productInput.value}: interest = principal × 26% × actual days ÷ 365 (or ÷ 366 in a leap year), calculated on the original principal. Maximum 24 months.`;
 }
 
 function clearSchedule() {

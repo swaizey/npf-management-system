@@ -1,4 +1,4 @@
-const { Paragraph, Table, TableCell, TableRow, TextRun, WidthType } = require("docx");
+const { AlignmentType, BorderStyle, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } = require("docx");
 const {
   addParagraph,
   amountInWords,
@@ -10,7 +10,7 @@ const {
   separatorLine
 } = require("./document-utils");
 const { calculateKeyFacts } = require("./key-fact");
-const { calculateOfferLetterValues, formatScheduleDate } = require("./loan-calculations");
+const { calculateOfferLetterValues, formatScheduleDate, roundCurrency } = require("./loan-calculations");
 
 function displayOfferDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
@@ -22,46 +22,182 @@ function displayOfferDate(date) {
   return `${day}${suffix} ${month}, ${date.getFullYear()}`;
 }
 
+function scheduleDetail(label, value, size = 17) {
+  return new Paragraph({
+    children: [
+      new TextRun({ text: `${label}: `, bold: true, size, color: "000000" }),
+      new TextRun({ text: String(value ?? "N/A"), size, color: "000000" })
+    ],
+    spacing: { before: 20, after: 20, line: 220 }
+  });
+}
+
+function scheduleSummaryTable(customer, schedule) {
+  const accountNumber = customer.account || customer.accountNumber || "N/A";
+  const settlementAccount = customer.settlementAccount || accountNumber;
+  const accountBranch = customer.accountBranch || customer.branch || "N/A";
+  const details = [
+    [
+      ["Account Number", accountNumber],
+      ["Settlement Account", settlementAccount],
+      ["First Payment Date", displayDate(schedule.firstPaymentDate)]
+    ],
+    [
+      ["Account Title", customer.name],
+      ["Account Branch", accountBranch],
+      ["Loan Schedule", "Annualized"]
+    ],
+    [
+      ["Loan Type", customer.loanProduct],
+      ["Currency", customer.currency || "NGN"],
+      ["Total Principal", money(schedule.principal)]
+    ],
+    [
+      ["Loan Amount", money(schedule.principal)],
+      ["Loan Term", `${schedule.durationMonths} Month(s)`],
+      ["Total Interest", money(schedule.totalInterest)]
+    ],
+    [
+      ["Start Date", displayDate(customer.drawdownDate)],
+      ["Interest Rate", `${schedule.annualRate * 100}% per annum`],
+      ["Total Principal + Interest", money(schedule.totalRepayment)]
+    ],
+    [
+      ["Maturity Date", displayDate(schedule.installments[schedule.installments.length - 1].dueDate)],
+      ["Repayment Type", "Equal principal and interest"],
+      ["Total Number of Instalments", schedule.installments.length]
+    ]
+  ];
+  const widths = [5300, 5300, 5300];
+  const border = { style: BorderStyle.SINGLE, size: 4, color: "7F8C8D" };
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: widths,
+    borders: {
+      top: border,
+      bottom: border,
+      left: border,
+      right: border,
+      insideHorizontal: border,
+      insideVertical: border
+    },
+    rows: details.map((row) => new TableRow({
+      cantSplit: true,
+      children: row.map(([label, value], index) => new TableCell({
+        width: { size: widths[index], type: WidthType.DXA },
+        margins: { top: 45, bottom: 45, left: 80, right: 80 },
+        children: [scheduleDetail(label, value)]
+      }))
+    }))
+  });
+}
+
 function repaymentScheduleTable(schedule) {
-  const headers = ["Payment", "Due date", "Opening balance", "Principal", "Interest", "Total payment", "Closing balance"];
-  const widths = [500, 1400, 1600, 1300, 1300, 1500, 1700];
+  const headers = [
+    "Repayment Date",
+    "Principal Repayment",
+    "Interest Repayment",
+    "Total Repayment",
+    "Pay Order",
+    "Outstanding Principal",
+    "Cumulative Total Repayment",
+    "Cumulative Principal Repayment",
+    "Cumulative Interest Repayment",
+    "Interest Status",
+    "Principal Status",
+    "Loan Payment Status"
+  ];
+  const widths = [1200, 1400, 1400, 1400, 600, 1300, 1500, 1500, 1500, 800, 800, 2438];
+  const border = { style: BorderStyle.SINGLE, size: 4, color: "202020" };
+  let cumulativePrincipal = 0;
+  let cumulativeInterest = 0;
+  let cumulativeTotal = 0;
   const rows = [
     new TableRow({
       tableHeader: true,
       children: headers.map((text, index) => new TableCell({
         width: { size: widths[index], type: WidthType.DXA },
+        shading: { fill: "D9EEF2" },
+        margins: { top: 45, bottom: 45, left: 35, right: 35 },
         children: [new Paragraph({
-          children: [new TextRun({ text, bold: true, size: 16, color: "000000" })],
-          spacing: { before: 50, after: 50 }
+          children: [new TextRun({ text, bold: true, size: 13, color: "000000" })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 0, after: 0, line: 180 }
         })]
       }))
     }),
-    ...schedule.installments.map((installment) => new TableRow({
-      children: [
-        String(installment.installment),
+    ...schedule.installments.map((installment, index) => {
+      cumulativePrincipal = roundCurrency(cumulativePrincipal + installment.principal);
+      cumulativeInterest = roundCurrency(cumulativeInterest + installment.interest);
+      cumulativeTotal = roundCurrency(cumulativeTotal + installment.total);
+      const values = [
         formatScheduleDate(installment.dueDate),
-        money(installment.openingPrincipal),
         money(installment.principal),
         money(installment.interest),
         money(installment.total),
-        money(installment.outstandingPrincipal)
+        schedule.installments.length - index,
+        money(installment.outstandingPrincipal),
+        money(cumulativeTotal),
+        money(cumulativePrincipal),
+        money(cumulativeInterest),
+        "O",
+        "O",
+        "O"
+      ];
+      return new TableRow({
+        cantSplit: true,
+        children: values.map((value, cellIndex) => new TableCell({
+          width: { size: widths[cellIndex], type: WidthType.DXA },
+          margins: { top: 35, bottom: 35, left: 35, right: 35 },
+          children: [new Paragraph({
+            children: [new TextRun({ text: String(value), size: 12, color: "000000" })],
+            spacing: { before: 0, after: 0, line: 180 }
+          })]
+        }))
+      });
+    }),
+    new TableRow({
+      tableHeader: true,
+      children: [
+        "Totals",
+        money(schedule.principal),
+        money(schedule.totalInterest),
+        money(schedule.totalRepayment),
+        "",
+        money(schedule.installments[schedule.installments.length - 1].outstandingPrincipal),
+        money(schedule.totalRepayment),
+        money(cumulativePrincipal),
+        money(cumulativeInterest),
+        "",
+        "",
+        ""
       ].map((value, index) => new TableCell({
         width: { size: widths[index], type: WidthType.DXA },
+        shading: { fill: "D9EEF2" },
+        margins: { top: 45, bottom: 45, left: 35, right: 35 },
         children: [new Paragraph({
-          children: [new TextRun({ text: value, size: 16, color: "000000" })],
-          spacing: { before: 40, after: 40 }
+          children: [new TextRun({ text: value, bold: true, size: 12, color: "000000" })],
+          spacing: { before: 0, after: 0, line: 180 }
         })]
       }))
-    }))
+    })
   ];
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: widths.reduce((total, width) => total + width, 0), type: WidthType.DXA },
     columnWidths: widths,
+    borders: {
+      top: border,
+      bottom: border,
+      left: border,
+      right: border,
+      insideHorizontal: border,
+      insideVertical: border
+    },
     rows
   });
 }
 
-function createOfferLetter(customer, guarantors, repayment, appraisingOfficer, schedule) {
+function createOfferLetter(customer, guarantors, repayment, schedule) {
   const facts = calculateKeyFacts(customer);
   const values = calculateOfferLetterValues(customer);
   const offerDate = new Date(`${customer.documentDate}T00:00:00`);
@@ -70,20 +206,21 @@ function createOfferLetter(customer, guarantors, repayment, appraisingOfficer, s
   const purpose = String(customer.purpose || "").replace(/^to\s+/i, "");
   const title = `OFFER LETTER FOR ${customer.loanProduct}`;
   const guarantorDetails = guarantors.length
-    ? guarantors.map((guarantor) => `${guarantor.name} (Account Number: ${guarantor.account})`).join("; ")
+    ? guarantors.map((guarantor) => `${guarantor.name} (A/C: ${guarantor.account})`).join("; ")
     : "No guarantor details provided";
   const interestRate = customer.loanProduct === "Sharp Sharp"
-    ? "4% Flat per Month (48% per annum; subject to review in line with changes in the money market rate and bank policy as may occur from time to time)."
-    : "26% per annum, calculated daily on the original principal using the actual days in each repayment period (subject to review in line with the changes in the money market rate and bank policy as may occur from time to time).";
+    ? "48% per annum (4% monthly equivalent), calculated daily on the original principal using actual days in each period."
+    : "26% per annum, calculated daily on the original principal using a 365-day year, or 366 days in a leap year.";
   const variableRateText = "Changes in the prevailing market rates and conditions during the tenor of this agreement may alter the rates agreed upon by the parties. Any such changes will be effected 10 days after the Borrower has been duly notified of these changes. Note that the Bank is not obliged to disclose the basis on which the assessment was made.";
-  const content = [
+  const introduction = [
     centeredTitle(title),
     centeredTitle("OFFER LETTER"),
     addParagraph(`Date: ${displayOfferDate(offerDate)}`),
     labelValue("Customer's Name", customer.name),
     labelValue("Customer's Address", customer.address),
     addParagraph(`Dear ${female ? "Ma" : "Sir"},`),
-    addParagraph(`RE: APPLICATION FOR LOAN FACILITY OF (${money(customer.loanAmount)})`, { spacing: { before: 140, after: 160 } }),
+    addParagraph(`RE: APPLICATION FOR LOAN FACILITY OF (${money(customer.loanAmount)})`, { spacing: { before: 140, after: 80 } }),
+    separatorLine(),
     addParagraph(`We refer to your application dated ${displayOfferDate(applicationDate)} on the above subject matter and hereby convey our Management's approval under the following terms and conditions:`),
     labelValue("Lender", "NPF Microfinance Bank Plc"),
     labelValue("Borrower", customer.name),
@@ -105,12 +242,39 @@ function createOfferLetter(customer, guarantors, repayment, appraisingOfficer, s
     labelValue("Credit life Insurance Premium", `1.5% (${money(values.insurance)}) of Amount approved`),
     labelValue("Repayment", customer.loanProduct === "Sharp Sharp"
       ? `Monthly principal and interest ${money(repayment)}`
-      : `Fixed monthly principal of ${money(schedule.installments[0].principal)} plus interest calculated on the original principal; first payment is due one month after drawdown on ${displayDate(schedule.firstPaymentDate)}.`),
-    heading("Repayment Schedule"),
+      : `Fixed monthly principal of ${money(schedule.installments[0].principal)} plus interest calculated on the original principal; first payment is due one month after drawdown on ${displayDate(schedule.firstPaymentDate)}.`)
+  ];
+  const repaymentSchedule = [
+    centeredTitle("LOAN CALCULATION"),
+    scheduleSummaryTable(customer, schedule),
     ...(customer.loanProduct === "Sharp Sharp" ? [] : [
-      addParagraph("Interest for each period is calculated on the original principal: original principal × 26% × actual days in the period ÷ 365. The interest amount changes with the number of days in each period; monthly principal payments remain fixed.")
+      addParagraph("Interest for each period is calculated on the original principal: original principal × 26% × actual days in the period ÷ 365 (or ÷ 366 in a leap year). The interest amount changes with the number of days in each period; monthly principal payments remain fixed.")
     ]),
     repaymentScheduleTable(schedule),
+    new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      columnWidths: [5000, 5000],
+      rows: [new TableRow({
+        children: ["AUTHORISED SIGNATORY", "CUSTOMER SIGNATORY"].map((text) => new TableCell({
+          width: { size: 5000, type: WidthType.DXA },
+          margins: { top: 220, bottom: 0, left: 200, right: 200 },
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text: "________________________________________", size: 16, color: "000000" })],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 0, after: 40 }
+            }),
+            new Paragraph({
+              children: [new TextRun({ text, bold: true, size: 16, color: "000000" })],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 0, after: 0 }
+            })
+          ]
+        }))
+      })]
+    })
+  ];
+  const terms = [
     heading("Early Liquidation terms"),
     addParagraph("All outstanding sums of the Facility (whether principal, interest or any other monies owing to the Bank) shall be repayable at any time forthwith on demand."),
     addParagraph("The Bank is at liberty to recall the facility if the project fails to comply with the Environmental and Social policy of the Bank."),
@@ -129,11 +293,14 @@ function createOfferLetter(customer, guarantors, repayment, appraisingOfficer, s
     addParagraph("i. The insurance cover required for each loan is dependent on the peculiarity of a facility or security."),
     addParagraph("ii. The Borrower shall maintain a credit life insurance policy which shall pay the outstanding loan in the event of death, critical illness or in the case of loss of job (the insurance cover will be valid for 6 months' instalment repayments) where applicable."),
     addParagraph("iii. In the case of a property used as security, the Borrower shall maintain insurance against all risks of loss to the property. The insurance shall cover building collapse, fire, flood, natural disasters and vandalism where applicable."),
-    separatorLine(),
-
+    separatorLine()
   ];
 
-  return content;
+  return [
+    { orientation: "portrait", children: introduction },
+    { orientation: "landscape", children: repaymentSchedule },
+    { orientation: "portrait", children: terms }
+  ];
 }
 
 module.exports = { createOfferLetter };

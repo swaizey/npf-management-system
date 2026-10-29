@@ -8,7 +8,7 @@ const {
 } = require("./src/Appraisal");
 const { calculateKeyFacts, calculateLoanSchedule, formatScheduleDate } = require("./src/loan-calculations");
 const { samplePayload } = require("./sample-data");
-const { amountInWords } = require("./src/document-utils");
+const { amountInWords, money } = require("./src/document-utils");
 
 async function readDocumentText(buffer) {
   const zip = await JSZip.loadAsync(buffer);
@@ -46,10 +46,29 @@ async function readDocumentXml(buffer) {
     assert.match(validateLoanDetails({ ...sharpSharp, loanProduct: "Term Loan", durationMonths: 25 }), /between 1 and 24/);
     const sharpSchedule = calculateLoanSchedule(100000, 12, "Sharp Sharp", "2026-10-25");
     assert.equal(calculateMonthlyRepayment(100000, 12, "Sharp Sharp", "2026-10-25"), 12333.33);
-    assert.equal(sharpSchedule.installments[0].interest, 4000);
-    assert.equal(sharpSchedule.installments[11].interest, 4000);
-    assert.equal(sharpSchedule.rateDescription, "4% flat per month (48% per annum)");
-    assert.equal(calculateMonthlyRepayment(1000000, 24, "Term Loan", "2026-10-25"), 63363.01);
+    assert.equal(sharpSchedule.installments[0].interest, 4076.71);
+    assert.equal(sharpSchedule.installments[0].daysInPeriod, 31);
+    assert.equal(sharpSchedule.installments[1].interest, 3945.21);
+    assert.equal(sharpSchedule.installments[1].daysInPeriod, 30);
+    assert.equal(sharpSchedule.installments[11].interest, 3945.21);
+    assert.equal(sharpSchedule.totalInterest, 48000);
+    assert.equal(sharpSchedule.rateDescription, "48% per annum (4% monthly equivalent), calculated daily on the original principal");
+    const sharpCalendarDays = calculateLoanSchedule(1000000, 12, "Sharp Sharp", "2025-01-31");
+    assert.deepEqual(sharpCalendarDays.installments.slice(0, 3).map(({ daysInPeriod, interest }) => [daysInPeriod, interest]), [
+      [28, 36821.92],
+      [31, 40767.12],
+      [30, 39452.05]
+    ]);
+    assert.equal(calculateMonthlyRepayment(1000000, 24, "Term Loan", "2026-10-25"), 63338.85);
+    for (const product of ["Term Loan", "Other Micro Loan"]) {
+      const schedule = calculateLoanSchedule(2500000, 24, product, "2025-01-31");
+      assert.equal(schedule.annualRate, 0.26);
+      assert.deepEqual(schedule.installments.slice(0, 3).map(({ daysInPeriod, interest }) => [daysInPeriod, interest]), [
+        [28, 49863.01],
+        [31, 55205.48],
+        [30, 53424.66]
+      ]);
+    }
     assert.equal(formatScheduleDate("2026-11-28"), "28-NOV-2026");
     assert.equal(formatScheduleDate(new Date(2026, 10, 28, 1)), "28-NOV-2026");
     const crossRealmDate = require("node:vm").runInNewContext("new Date(2026, 10, 28, 1)");
@@ -68,7 +87,7 @@ async function readDocumentXml(buffer) {
       { dueDate: "2026-11-22", daysInPeriod: 31, openingPrincipal: 1500000, principal: 62500, interest: 33123.29, total: 95623.29 },
       { dueDate: "2026-12-22", daysInPeriod: 30, openingPrincipal: 1437500, principal: 62500, interest: 32054.79, total: 94554.79 }
     ]);
-    assert.equal(repaymentSchedule.totalInterest, 781068.49);
+    assert.equal(repaymentSchedule.totalInterest, 780207.28);
     assert.equal(repaymentSchedule.installments[23].outstandingPrincipal, 0);
 
     const monthEndSchedule = calculateLoanSchedule(1500000, 5, "Term Loan", "2025-01-31");
@@ -93,7 +112,23 @@ async function readDocumentXml(buffer) {
       ["2024-02-29", 29],
       ["2024-03-31", 31]
     ]);
-    assert.equal(leapYearSchedule.installments[0].interest, 30986.3);
+    assert.equal(leapYearSchedule.installments[0].interest, 30901.64);
+    assert.equal(leapYearSchedule.installments[1].interest, 33032.79);
+
+    const nonLeapInterest = calculateLoanSchedule(1500000, 1, "Other Micro Loan", "2025-01-01");
+    assert.deepEqual(nonLeapInterest.installments.map(({ daysInPeriod, interest }) => [daysInPeriod, interest]), [
+      [31, 33123.29]
+    ]);
+
+    const leapYearInterest = calculateLoanSchedule(1500000, 1, "Other Micro Loan", "2024-01-31");
+    assert.deepEqual(leapYearInterest.installments.map(({ daysInPeriod, interest }) => [daysInPeriod, interest]), [
+      [29, 30901.64]
+    ]);
+
+    const crossYearInterest = calculateLoanSchedule(1500000, 1, "Term Loan", "2023-12-15");
+    assert.deepEqual(crossYearInterest.installments.map(({ daysInPeriod, interest }) => [daysInPeriod, interest]), [
+      [31, 33082.42]
+    ]);
 
     const termKeyFacts = calculateKeyFacts({
       recommendedAmount: 1000000,
@@ -101,14 +136,16 @@ async function readDocumentXml(buffer) {
       loanProduct: "Term Loan",
       drawdownDate: "2026-10-25"
     });
-    assert.equal(termKeyFacts.interest, 520712.28);
-    assert.equal(termKeyFacts.totalRepayment, 1520712.28);
+    assert.equal(termKeyFacts.interest, 520132.34);
+    assert.equal(termKeyFacts.totalRepayment, 1520132.34);
+    assert.equal(termKeyFacts.mandatorySavings, 30000);
     assert.equal(termKeyFacts.insurance, 15000);
     assert.equal(termKeyFacts.managementFee, 10000);
-    assert.equal(termKeyFacts.managementFeeVat, 170);
-    assert.equal(termKeyFacts.thirdPartyCharges, 2125);
-    assert.equal(termKeyFacts.totalCharges, 27295);
-    assert.equal(termKeyFacts.totalCostOfCredit, 548007.28);
+    assert.equal(termKeyFacts.managementFeeVat, 750);
+    assert.equal(termKeyFacts.adhesiveStamp, 1000);
+    assert.equal(termKeyFacts.thirdPartyCharges, 17800);
+    assert.equal(termKeyFacts.totalCharges, 27800);
+    assert.equal(termKeyFacts.totalCostOfCredit, 547932.34);
 
     const sharpKeyFacts = calculateKeyFacts({
       recommendedAmount: 100000,
@@ -119,7 +156,7 @@ async function readDocumentXml(buffer) {
     assert.equal(sharpKeyFacts.interest, 48000);
     assert.equal(sharpKeyFacts.managementFee, 0);
     assert.equal(sharpKeyFacts.managementFeeVat, 0);
-    assert.equal(sharpKeyFacts.totalCharges, 3625);
+    assert.equal(sharpKeyFacts.totalCharges, 3550);
 
     const buffer = await createLoanDocument(samplePayload, samplePayload.templates).toBuffer();
     console.log(`Generated document buffer size: ${buffer.length} bytes`);
@@ -127,16 +164,62 @@ async function readDocumentXml(buffer) {
     assert.ok(keyFactBuffer.length > 0);
     console.log(`Generated Key Facts Statement buffer size: ${keyFactBuffer.length} bytes`);
     const keyFactText = await readDocumentText(keyFactBuffer);
-    assert.match(keyFactText, /The loan/);
-    assert.match(keyFactText, /Total cost of consumer credit/);
-    assert.match(keyFactText, /\(A\) Lender fees/);
-    assert.match(keyFactText, /\(B\) Third-party fees and charges/);
+    const sampleKeyFacts = calculateKeyFacts({
+      ...samplePayload.customer,
+      loanProduct: resolveLoanProduct(samplePayload.customer)
+    });
+    assert.match(keyFactText, /THIS IS NOT AN OFFER OF CREDIT OR CONTRACT/);
+    assert.match(keyFactText, /This Key Facts Statement \(KFS\) summarizes key information/);
+    assert.match(keyFactText, /DISCLOSURE DATE/);
+    assert.match(keyFactText, /The final loan features may differ because of your personal financial position/);
+    assert.match(keyFactText, /TOTAL COST TO CONSUMER/);
+    assert.ok(keyFactText.includes(`Total amount you will pay back: ${money(sampleKeyFacts.totalRepayment)}`));
+    assert.ok(keyFactText.includes(`This means you will pay back ${money(sampleKeyFacts.interest)} in interest for ${money(sampleKeyFacts.principal)} borrowed.`));
+    assert.match(keyFactText, /Annual Percentage Rate \(APR\): 26%/);
+    assert.match(keyFactText, /useful tool for comparison with similar loans/);
+    assert.ok(keyFactText.includes(`3% Mandatory Deposit (${money(sampleKeyFacts.mandatorySavings)})`));
+    assert.match(keyFactText, /Specific information about your loan/);
+    assert.ok(keyFactText.includes(`Loan received ${money(sampleKeyFacts.principal)}`));
+    assert.ok(keyFactText.includes("Total interest charges (total interest you will pay)"));
+    assert.ok(keyFactText.includes(`(Total interest may increase for variable interest rates.) ${money(sampleKeyFacts.interest)}`));
+    assert.ok(keyFactText.includes("Total fees and charges*"));
+    assert.ok(keyFactText.includes(`(Total other charges you will pay throughout the duration of the loan.) ${money(sampleKeyFacts.totalCharges)}`));
+    assert.ok(keyFactText.includes("Total cost of credit"));
+    assert.ok(keyFactText.includes(`Total cost of credit (This is made up of total interest and all other charges for the tenor of the loan.) ${money(sampleKeyFacts.totalCostOfCredit)}`));
+    assert.ok(keyFactText.includes(`Date of first repayment ${require("./src/document-utils").displayDate(sampleKeyFacts.schedule.firstPaymentDate)}`));
+    assert.match(keyFactText, /Total number of repayments 24 monthly repayments/);
+    assert.match(keyFactText, /\(A\) Credit provider's fees/);
+    assert.match(keyFactText, /\(B\) Third party fees\/charges/);
+    assert.ok(keyFactText.includes(`Total (A) ${money(sampleKeyFacts.lenderCharges)}`));
+    assert.ok(keyFactText.includes(`Total (B) ${money(sampleKeyFacts.thirdPartyCharges)}`));
+    assert.ok(keyFactText.includes(`Total Fees and charges (A+B) ${money(sampleKeyFacts.totalCharges)}`));
+    assert.match(keyFactText, /Adhesive Stamp/);
+    assert.match(keyFactText, /Stamp Duty/);
+    assert.match(keyFactText, /Insurance Fees/);
+    assert.match(keyFactText, /Credit Bureau Search/);
+    assert.match(keyFactText, /VAT Charge/);
+    assert.match(keyFactText, /Penalties and Additional Requirements/);
+    assert.match(keyFactText, /•\s+Late Payment:/);
+    assert.match(keyFactText, /•\s+Early Liquidation of the Loan:/);
+    assert.match(keyFactText, /•\s+Cooling Off Period:/);
+    assert.match(keyFactText, /•\s+Variations:/);
+    assert.match(keyFactText, /charged 1% flat per month on the overdue amount/);
+    assert.match(keyFactText, /You may cancel your loan contract within 3 days after signing/);
+    assert.match(keyFactText, /08152776012/);
+    assert.match(keyFactText, /Ccare@npfmicrofinancebank\.com/);
+    assert.match(keyFactText, /cpd@cbn\.go/);
+    assert.ok(keyFactText.indexOf("Specific information about your loan") < keyFactText.indexOf("Fees and charges"));
+    assert.ok(keyFactText.indexOf("(B) Third party fees/charges") < keyFactText.indexOf("Penalties and Additional Requirements"));
     const keyFactXml = await readDocumentXml(keyFactBuffer);
-    assert.equal((keyFactXml.match(/<w:tbl>/g) || []).length, 2);
+    assert.equal((keyFactXml.match(/<w:tbl>/g) || []).length, 5);
+    assert.match(keyFactXml, /w:fill="D9EEF2"/);
+    assert.match(keyFactXml, /w:fill="F1F1F1"/);
+    assert.match(keyFactXml, /w:u w:val="single"/);
     const offerLetterBuffer = await createLoanDocument(samplePayload, ["offer"]).toBuffer();
     assert.ok(offerLetterBuffer.length > 0);
     console.log(`Generated offer letter buffer size: ${offerLetterBuffer.length} bytes`);
     const offerLetterText = await readDocumentText(offerLetterBuffer);
+    const offerLetterXml = await readDocumentXml(offerLetterBuffer);
     assert.match(offerLetterText, /OFFER LETTER FOR Term Loan/);
     assert.match(offerLetterText, /Dear Sir/);
     assert.match(offerLetterText, /One Million Naira Only/);
@@ -144,13 +227,39 @@ async function readDocumentXml(buffer) {
     assert.match(offerLetterText, /Expiry Date: 24 November 2028/);
     assert.match(offerLetterText, /VAT 7\.5% of Management Processing fee \(₦750\.00\)/);
     assert.match(offerLetterText, /3% Mandatory Saving Deposit \(₦30,000\.00\)/);
-    assert.match(offerLetterText, /Repayment Schedule/);
+    assert.match(offerLetterText, /LOAN CALCULATION/);
+    assert.match(offerLetterText, /Account Number: 00205698645/);
+    assert.match(offerLetterText, /Settlement Account: 00205698645/);
+    assert.match(offerLetterText, /First Payment Date: 25 November 2026/);
+    assert.match(offerLetterText, /Account Title: Ken Obi/);
+    assert.match(offerLetterText, /Total Number of Instalments: 24/);
+    assert.match(offerLetterText, /Cumulative Principal Repayment/);
+    assert.match(offerLetterText, /Cumulative Interest Repayment/);
+    assert.match(offerLetterText, /Interest Status/);
+    assert.match(offerLetterText, /Principal Status/);
+    assert.match(offerLetterText, /Loan Payment Status/);
+    const offerSchedule = calculateLoanSchedule(
+      samplePayload.customer.recommendedAmount,
+      samplePayload.customer.durationMonths,
+      resolveLoanProduct(samplePayload.customer),
+      samplePayload.customer.drawdownDate
+    );
+    assert.ok(offerLetterText.includes(money(offerSchedule.installments[0].total)));
+    assert.ok(offerLetterText.includes(money(offerSchedule.totalInterest)));
+    assert.ok(offerLetterText.includes(money(offerSchedule.totalRepayment)));
+    assert.match(offerLetterText, /Loan Payment Status/);
     assert.match(offerLetterText, /26% per annum, calculated daily on the original principal/);
     assert.match(offerLetterText, /25 November 2026/);
     assert.match(offerLetterText, /25-NOV-2026/);
     assert.match(offerLetterText, /₦22,082\.19/);
     assert.match(offerLetterText, /Interest for each period is calculated on the original principal/);
     assert.doesNotMatch(offerLetterText, /attached repayment schedule/i);
+    assert.match(offerLetterXml, /w:orient="landscape"/);
+    assert.match(offerLetterXml, /w:w="16838" w:h="11906" w:orient="landscape"/);
+    assert.match(offerLetterXml, /w:w="15838"/);
+    assert.equal((offerLetterXml.match(/w:orient="landscape"/g) || []).length, 1);
+    assert.equal((offerLetterXml.match(/w:orient="portrait"/g) || []).length, 2);
+    assert.match(offerLetterXml, /w:bottom[^>]*w:color="000000"/);
     const femalePayload = {
       ...samplePayload,
       customer: { ...samplePayload.customer, gender: "Female" }
@@ -167,9 +276,24 @@ async function readDocumentXml(buffer) {
     assert.match(femaleAppraisalText, /her monthly salary/);
     const appraisalBuffer = await createLoanDocument(samplePayload, ["appraisal"]).toBuffer();
     const appraisalText = await readDocumentText(appraisalBuffer);
+    assert.match(appraisalText, /LOAN APPRAISAL/);
+    assert.match(appraisalText, /Proposed terms and conditions/);
+    assert.doesNotMatch(appraisalText, /Customer and facility background/);
+    const appraisalSchedule = calculateLoanSchedule(
+      samplePayload.customer.recommendedAmount,
+      samplePayload.customer.durationMonths,
+      resolveLoanProduct(samplePayload.customer),
+      samplePayload.customer.drawdownDate
+    );
+    const highestRepayment = Math.max(...appraisalSchedule.installments.map(({ total }) => total));
+    assert.ok(appraisalText.includes(`REPAYMENT: Monthly repayment of ${money(highestRepayment)}`));
     assert.match(appraisalText, /account number 00205698645/);
     assert.doesNotMatch(appraisalText, /\[object Object\]/);
     const appraisalXml = await readDocumentXml(appraisalBuffer);
+    assert.match(appraisalXml, /w:fill="EAF0F6"/);
+    assert.match(appraisalXml, /w:insideH/);
+    assert.equal((appraisalXml.match(/w:type="page"/g) || []).length, 1);
+    assert.match(appraisalXml, /w:w="3600"/);
     const appraisalParagraphs = appraisalXml.split("</w:p>").map((paragraph) => paragraph.replace(/<[^>]+>/g, " "));
     assert.ok(appraisalParagraphs.some((paragraph) => paragraph.includes("(1) Remittance of monthly salary through the bank.")));
     assert.ok(appraisalParagraphs.some((paragraph) => paragraph.includes("(2) Personal Guarantor")));
@@ -182,12 +306,14 @@ async function readDocumentXml(buffer) {
     assert.match(addressAppraisalText, /serving member of NPF Payroll/);
     const allTemplatesBuffer = await createLoanDocument(samplePayload, ["appraisal", "offer", "keyfact"]).toBuffer();
     const allTemplatesXml = await readDocumentXml(allTemplatesBuffer);
-    assert.equal((allTemplatesXml.match(/w:type="page"/g) || []).length, 2);
+    assert.equal((allTemplatesXml.match(/w:type="page"/g) || []).length, 1);
+    assert.match(allTemplatesXml, /w:orient="landscape"/);
     assert.match(allTemplatesXml, /w:color w:val="000000"/);
     assert.match(allTemplatesXml, /w:bottom[^>]*w:color="000000"/);
     const circStandaloneBuffer = await createLoanDocument(samplePayload, ["appraisal", "circ", "offer", "keyfact"]).toBuffer();
     const circStandaloneXml = await readDocumentXml(circStandaloneBuffer);
-    assert.equal((circStandaloneXml.match(/w:type="page"/g) || []).length, 3);
+    assert.equal((circStandaloneXml.match(/w:type="page"/g) || []).length, 1);
+    assert.match(circStandaloneXml, /w:orient="landscape"/);
     console.log("Sample document generation successful.");
   } catch (error) {
     console.error("Sample document generation failed:", error.message || error);

@@ -57,6 +57,28 @@ function addMonths(date, months) {
   return result;
 }
 
+function calculateInterest(principal, annualRate, startDate, endDate, useLeapYearDenominator) {
+  if (!useLeapYearDenominator) {
+    const days = Math.round((endDate - startDate) / 86400000);
+    return roundCurrency(principal * annualRate * days / 365);
+  }
+
+  let interest = 0;
+  let periodStart = new Date(startDate);
+  while (periodStart < endDate) {
+    const year = periodStart.getUTCFullYear();
+    const nextYear = new Date(Date.UTC(year + 1, 0, 1));
+    const periodEnd = endDate < nextYear ? endDate : nextYear;
+    const days = Math.round((periodEnd - periodStart) / 86400000);
+    const yearDays = new Date(Date.UTC(year + 1, 0, 1)) - new Date(Date.UTC(year, 0, 1)) === 366 * 86400000
+      ? 366
+      : 365;
+    interest += principal * annualRate * days / yearDays;
+    periodStart = periodEnd;
+  }
+  return roundCurrency(interest);
+}
+
 function calculateOfferLetterValues(customer) {
   const principal = Number(customer.recommendedAmount);
   const documentDate = parseDate(customer.documentDate);
@@ -89,6 +111,7 @@ function calculateLoanSchedule(principalValue, durationMonthsValue, product, dra
   }
 
   const sharpSharp = product === "Sharp Sharp";
+  const annualRate = sharpSharp ? 0.48 : 0.26;
   const fixedPrincipal = roundCurrency(principal / durationMonths);
   let outstandingPrincipal = principal;
   let previousDate = drawdown;
@@ -101,9 +124,7 @@ function calculateLoanSchedule(principalValue, durationMonthsValue, product, dra
       ? outstandingPrincipal
       : Math.min(fixedPrincipal, outstandingPrincipal);
     const openingPrincipal = outstandingPrincipal;
-    const interestPayment = sharpSharp
-      ? roundCurrency(principal * 0.04)
-      : roundCurrency(principal * 0.26 * daysInPeriod / 365);
+    const interestPayment = calculateInterest(principal, annualRate, previousDate, dueDate, !sharpSharp);
     const totalPayment = roundCurrency(principalPayment + interestPayment);
     outstandingPrincipal = roundCurrency(outstandingPrincipal - principalPayment);
     installments.push({
@@ -125,7 +146,9 @@ function calculateLoanSchedule(principalValue, durationMonthsValue, product, dra
     principal,
     durationMonths,
     annualRate: sharpSharp ? 0.48 : 0.26,
-    rateDescription: sharpSharp ? "4% flat per month (48% per annum)" : "26% per annum, calculated daily on the original principal",
+    rateDescription: sharpSharp
+      ? "48% per annum (4% monthly equivalent), calculated daily on the original principal"
+      : "26% per annum on the original principal (principal × 26% × actual days ÷ 365, or ÷ 366 in a leap year)",
     firstPaymentDate: installments[0].dueDate,
     installments,
     totalInterest,
@@ -151,14 +174,16 @@ function calculateKeyFacts(customer) {
   const interest = schedule.totalInterest;
   const totalRepayment = schedule.totalRepayment;
   const insurance = roundCurrency(principal * 0.015);
+  const mandatorySavings = roundCurrency(principal * 0.03);
   const managementFee = sharpSharp ? 0 : roundCurrency(principal * 0.01);
-  const managementFeeVat = roundCurrency(managementFee * 0.017);
+  const managementFeeVat = roundCurrency(managementFee * 0.075);
+  const adhesiveStamp = 1000;
   const creditBureau = 1000;
-  const stampDuty = 1000;
-  const seal = 50;
-  const vatOnCrc = 75;
-  const lenderCharges = roundCurrency(insurance + managementFee + managementFeeVat);
-  const thirdPartyCharges = roundCurrency(creditBureau + stampDuty + seal + vatOnCrc);
+  const stampDuty = 50;
+  const seal = 0;
+  const vatOnCrc = 0;
+  const lenderCharges = managementFee;
+  const thirdPartyCharges = roundCurrency(adhesiveStamp + stampDuty + insurance + creditBureau + managementFeeVat);
   const totalCharges = roundCurrency(lenderCharges + thirdPartyCharges);
 
   return {
@@ -171,8 +196,10 @@ function calculateKeyFacts(customer) {
     repaymentAmount: schedule.averageRepayment,
     schedule,
     insurance,
+    mandatorySavings,
     managementFee,
     managementFeeVat,
+    adhesiveStamp,
     creditBureau,
     stampDuty,
     seal,

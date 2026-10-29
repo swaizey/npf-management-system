@@ -5,12 +5,28 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test-document.js"
+    "test": "node test-document.js",
+    "dist": "electron-builder --win nsis"
   },
   "dependencies": {
     "docx": "^9.5.1"
   },
   "devDependencies": {
-    "electron": "^45.0.0"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.npfmicrofinance.managementsystem",
+    "productName": "NPF Management System",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src/logo.png"
+    },
+    "nsis": {
+      "oneClick": true
+    }
   }
 }
