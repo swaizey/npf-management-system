@@ -85,9 +85,9 @@
               <label class="field"><span>BVN *</span><input name="customerBvn" required inputmode="numeric" /></label>
               <label class="field"><span>NIN *</span><input name="customerNin" required inputmode="numeric" /></label>
               <label class="field"><span>AP / Force number *</span><input name="customerForceNumber" required /></label>
-              <label class="field"><span>Date of birth *</span><input name="customerDob" required type="date" /></label>
-              <label class="field"><span>Enlistment date *</span><input name="enlistmentDate" required type="date" /></label>
-              <label class="field"><span>Retirement date *</span><input name="customerRetirementDate" required type="date" /></label>
+              <label class="field"><span>Date of birth *</span><input name="customerDob" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+              <label class="field"><span>Enlistment date *</span><input name="enlistmentDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+              <label class="field"><span>Retirement date (35 years after enlistment; editable) *</span><input name="customerRetirementDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Calculated as 35 years after enlistment; edit if needed." /></label>
               <label class="field"><span>Monthly salary (₦) *</span><input name="customerSalary" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
               <label class="field"><span>Account number *</span><input name="customerAccount" required /></label>
               <label class="field"><span>Customer ID *</span><input name="customerId" required /></label>
@@ -100,9 +100,9 @@
               <label class="field"><span>Loan duration (months) *</span><input name="durationMonths" required type="number" min="1" max="24" value="24" /></label>
               <label class="field"><span>Loan cycle *</span><input name="loanCycle" required type="number" min="1" value="1" /></label>
               <label class="field"><span>MSS / salary source *</span><input name="mss" required /></label>
-              <label class="field"><span>Date applied *</span><input name="dateApplied" required type="date" /></label>
-              <label class="field"><span>Appraisal / offer date *</span><input name="documentDate" required type="date" /></label>
-              <label class="field"><span>Drawdown date *</span><input name="drawdownDate" required type="date" /></label>
+              <label class="field"><span>Date applied *</span><input name="dateApplied" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+              <label class="field"><span>Appraisal / offer date *</span><input name="documentDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+              <label class="field"><span>Drawdown date *</span><input name="drawdownDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
               <label class="field"><span>Appraising officer *</span><select name="appraisingOfficer" required><option value="Adigwe Patrick">Adigwe Patrick</option><option value="Obilo Tochi">Obilo Tochi</option><option value="Obiageli Everngeline">Obiageli Everngeline</option></select></label>
             </div>
           </section>
@@ -129,6 +129,7 @@
         <footer>NPF Management System <span>•</span> Creates editable .docx files</footer>
       </main>
     </div>
+    <script src="src/date-utils.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

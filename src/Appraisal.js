@@ -30,10 +30,12 @@ const {
 } = require("./loan-calculations");
 const { createKeyFacts } = require("./key-fact");
 const { createOfferLetter } = require("./offer-letter");
+const { createRepaymentFooter } = require("./document-footer");
+const { isValidISODate } = require("./date-utils");
 
 function resolveLoanProduct(customer) {
   if (customer.loanProduct === "Sharp Sharp") return "Sharp Sharp";
-  return Number(customer.recommendedAmount) >= 1000000 ? "Term Loan" : "Other Micro Loan";
+  return Number(customer.recommendedAmount) >= 1000001 ? "Term Loan" : "Other Micro Loan";
 }
 
 function validateLoanDetails(customer) {
@@ -46,11 +48,18 @@ function validateLoanDetails(customer) {
   if (!Number.isFinite(Number(customer.recommendedAmount)) || Number(customer.recommendedAmount) <= 0) {
     return "Enter a valid recommended amount.";
   }
-  const drawdownDate = new Date(`${customer.drawdownDate}T00:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(customer.drawdownDate || "")
-      || Number.isNaN(drawdownDate.getTime())
-      || drawdownDate.toISOString().slice(0, 10) !== customer.drawdownDate) {
+  if (!isValidISODate(customer.drawdownDate)) {
     return "Enter a valid drawdown date.";
+  }
+  const otherDates = [
+    ["date of birth", customer.dob],
+    ["enlistment date", customer.enlistmentDate],
+    ["retirement date", customer.retirementDate],
+    ["date applied", customer.dateApplied],
+    ["appraisal / offer date", customer.documentDate]
+  ];
+  for (const [label, date] of otherDates) {
+    if (!isValidISODate(date)) return `Enter a valid ${label}.`;
   }
 
   const product = resolveLoanProduct(customer);
@@ -65,6 +74,15 @@ function validateLoanDetails(customer) {
     return `${product} duration must be between 1 and ${maximumMonths} months.`;
   }
   return "";
+}
+
+function validateGuarantorDates(guarantors) {
+  const invalidDateIndex = guarantors.findIndex(
+    (guarantor) => !isValidISODate(guarantor.retirementDate)
+  );
+  return invalidDateIndex < 0
+    ? ""
+    : `Enter a valid retirement date for guarantor ${invalidDateIndex + 1}.`;
 }
 
 function guarantorTable(guarantors) {
@@ -172,14 +190,14 @@ function createAppraisal(customer, guarantors, appraisingOfficer) {
       spacing: { before: 0, after: 220 },
       keepNext: true
     }),
-    labelValue("FROM", "Head of Credit", true),
-    labelValue("TO", "Branch Manager", true),
+    labelValue("FROM", "Head of Credit (Onitsha)" , true),
+    labelValue("TO", "Branch Manager (Onitsha)", true),
     labelValue("SUBJECT", `Appraisal of ${money(customer.loanAmount)} Loan Facility for ${customer.name}`, true),
     labelValue("DATE", displayDocumentDate(customer.documentDate), true),
     separatorLine(),
-    addParagraph(`${customer.name} is a current account holder with the account number ${accountNumber} and Customer ID ${customer.id}. The mandate is complete with relatively satisfactory operations. ${possessivePronoun} BVN is ${customer.bvn}; phone number: ${customer.phone}; NIN: ${customer.nin}; date of birth: ${displayDate(customer.dob)}.`),
-    labelValue("CUSTOMER ADDRESS", customer.address),
-    addParagraph(`${subjectPronoun} is a serving member of ${customer.mss}, was enlisted on ${displayDate(customer.enlistmentDate)} and is due for retirement on ${displayDate(customer.retirementDate)}.`),
+    addParagraph(`${customer.name} is a current account holder with the account number ${accountNumber} and Customer ID ${customer.id}. The mandate is complete with relatively satisfactory operations. ${possessivePronoun} BVN is ${customer.bvn}; IPPIS: ${customer.ippis}; phone number: ${customer.phone}; NIN: ${customer.nin}; date of birth: ${displayDate(customer.dob)}.`),
+
+    addParagraph(`${subjectPronoun} is a serving member of ${customer.address}, was enlisted on ${displayDate(customer.enlistmentDate)} and is due for retirement on ${displayDate(customer.retirementDate)}.`),
     addParagraph(`${subjectPronoun} has approached the bank for a loan of ${money(customer.loanAmount)} for the purpose of ${customer.purpose}.`),
     addParagraph(Number(customer.loanCycle) > 1
       ? "The customer has taken previous facilities with the bank and paid them off fully without default."
@@ -225,8 +243,8 @@ function createAppraisal(customer, guarantors, appraisingOfficer) {
     addParagraph("1. Acceptance of offer letter"),
     addParagraph("2. Perfection of security"),
     addParagraph("3. 3% Mandatory savings"),
-    new Paragraph({ children: [new TextRun({ text: appraisingOfficer, bold: true, size: 22, color: "000000" })], spacing: { before: 260, after: 15 } }),
     addParagraph("____________________"),
+    new Paragraph({ children: [new TextRun({ text: appraisingOfficer, bold: true, size: 22, color: "000000" })], spacing: { before: 260, after: 15 } }),
     addParagraph("Signed (Appraising officer)")
   ];
 }
@@ -236,6 +254,8 @@ function createLoanDocument(payload, templates) {
   const { guarantors } = payload;
   const validationError = validateLoanDetails(customer);
   if (validationError) throw new Error(validationError);
+  const guarantorDateError = validateGuarantorDates(guarantors);
+  if (guarantorDateError) throw new Error(guarantorDateError);
   const appraisingOfficer = payload.appraisingOfficer || "Adigwe Patrick";
   const repayment = calculateMonthlyRepayment(
     customer.recommendedAmount,
@@ -305,10 +325,11 @@ function createLoanDocument(payload, templates) {
               orientation
             },
             margin: landscape
-              ? { top: 360, right: 360, bottom: 360, left: 360 }
+              ? { top: 360, right: 360, bottom: 600, left: 360, footer: 180 }
               : { top: 1000, right: 900, bottom: 1000, left: 900 }
           }
         },
+        ...(landscape ? { footers: { default: createRepaymentFooter() } } : {}),
         children
       };
     })
@@ -318,6 +339,7 @@ function createLoanDocument(payload, templates) {
 module.exports = {
   resolveLoanProduct,
   validateLoanDetails,
+  validateGuarantorDates,
   calculateMonthlyRepayment,
   calculateKeyFacts,
   createLoanDocument: (payload, templates) => ({

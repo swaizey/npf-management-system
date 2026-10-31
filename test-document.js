@@ -4,9 +4,18 @@ const {
   calculateMonthlyRepayment,
   createLoanDocument,
   resolveLoanProduct,
+  validateGuarantorDates,
   validateLoanDetails
 } = require("./src/Appraisal");
 const { calculateKeyFacts, calculateLoanSchedule, formatScheduleDate } = require("./src/loan-calculations");
+const { createCalculatorDocument } = require("./src/calculator-documents");
+const {
+  formatDateInput,
+  isValidISODate,
+  calculateRetirementDate,
+  parseDateInput,
+  validateDateInput
+} = require("./src/date-utils");
 const { samplePayload } = require("./sample-data");
 const { amountInWords, money } = require("./src/document-utils");
 
@@ -28,18 +37,63 @@ async function readDocumentXml(buffer) {
   return zip.file("word/document.xml").async("string");
 }
 
+function findTableXml(xml, text) {
+  return (xml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/g) || [])
+    .find((table) => table.includes(text));
+}
+
 (async () => {
   try {
     assert.equal(resolveLoanProduct({ recommendedAmount: 999999 }), "Other Micro Loan");
-    assert.equal(resolveLoanProduct({ recommendedAmount: 1000000 }), "Term Loan");
+    assert.equal(resolveLoanProduct({ recommendedAmount: 1000000 }), "Other Micro Loan");
+    assert.equal(resolveLoanProduct({ recommendedAmount: 1000001 }), "Term Loan");
+    assert.equal(resolveLoanProduct({ recommendedAmount: 1000000.99 }), "Other Micro Loan");
     assert.equal(resolveLoanProduct({ recommendedAmount: 1000000, loanProduct: "Sharp Sharp" }), "Sharp Sharp");
     assert.equal(amountInWords(1000000), "One Million Naira Only");
     assert.equal(amountInWords(1000000.5), "One Million Naira and Fifty Kobo Only");
+    assert.equal(parseDateInput("22/4/2025"), "2025-04-22");
+    assert.equal(parseDateInput("1/13/2025"), null);
+    assert.equal(parseDateInput("31/04/2025"), null);
+    assert.equal(parseDateInput("29/02/2024"), "2024-02-29");
+    assert.equal(parseDateInput("29/02/2025"), null);
+    assert.equal(formatDateInput("2025-04-22"), "22/04/2025");
+    assert.equal(isValidISODate("2025-13-01"), false);
+    assert.equal(calculateRetirementDate("2000-04-22"), "2035-04-22");
+    assert.equal(calculateRetirementDate("1996-02-29"), "2031-02-28");
+    assert.equal(calculateRetirementDate("invalid"), null);
+    let dateInputMessage = "";
+    const dateInput = {
+      value: "1/13/2025",
+      validity: { valid: false },
+      setCustomValidity(message) {
+        dateInputMessage = message;
+        this.validity.valid = !message;
+      }
+    };
+    assert.equal(validateDateInput(dateInput), false);
+    assert.match(dateInputMessage, /DD\/MM\/YYYY/);
+    dateInput.value = "22/4/2025";
+    assert.equal(validateDateInput(dateInput), true);
 
-    const sharpSharp = { gender: "Male", loanAmount: 100000, recommendedAmount: 100000, loanProduct: "Sharp Sharp", durationMonths: 12, drawdownDate: "2026-10-25" };
+    const sharpSharp = {
+      gender: "Male",
+      loanAmount: 100000,
+      recommendedAmount: 100000,
+      loanProduct: "Sharp Sharp",
+      durationMonths: 12,
+      dob: "1980-01-01",
+      enlistmentDate: "2000-01-01",
+      retirementDate: "2030-01-01",
+      dateApplied: "2026-10-20",
+      documentDate: "2026-10-25",
+      drawdownDate: "2026-10-25"
+    };
     assert.equal(validateLoanDetails(sharpSharp), "");
     assert.match(validateLoanDetails({ ...sharpSharp, gender: "" }), /gender/);
     assert.match(validateLoanDetails({ ...sharpSharp, drawdownDate: "2026-02-31" }), /drawdown date/);
+    assert.match(validateLoanDetails({ ...sharpSharp, documentDate: "2026-13-01" }), /appraisal \/ offer date/);
+    assert.equal(validateGuarantorDates([{ retirementDate: "2025-04-22" }]), "");
+    assert.match(validateGuarantorDates([{ retirementDate: "2025-13-01" }]), /guarantor 1/);
     assert.match(validateLoanDetails({ ...sharpSharp, recommendedAmount: 99999 }), /between/);
     assert.match(validateLoanDetails({ ...sharpSharp, recommendedAmount: 1000001 }), /between/);
     assert.match(validateLoanDetails({ ...sharpSharp, durationMonths: 13 }), /between 1 and 12/);
@@ -147,6 +201,68 @@ async function readDocumentXml(buffer) {
     assert.equal(termKeyFacts.totalCharges, 27800);
     assert.equal(termKeyFacts.totalCostOfCredit, 547932.34);
 
+    const calculatorDocumentPayload = {
+      amount: 1000000,
+      product: "Term Loan",
+      durationMonths: 2,
+      drawdownDate: "2026-10-25",
+      documentDate: "2026-10-29"
+    };
+    const calculatorRepaymentBuffer = await createCalculatorDocument({
+      ...calculatorDocumentPayload,
+      documentType: "repayment"
+    }).toBuffer();
+    const calculatorRepaymentText = await readDocumentText(calculatorRepaymentBuffer);
+    const calculatorRepaymentXml = await readDocumentXml(calculatorRepaymentBuffer);
+    assert.match(calculatorRepaymentText, /LOAN REPAYMENT SCHEDULE/);
+    assert.doesNotMatch(calculatorRepaymentText, /Days in Period/);
+    assert.doesNotMatch(calculatorRepaymentText, /Interest is calculated on the original principal at 26% per annum using actual days in each repayment period/);
+    assert.match(calculatorRepaymentText, /Total Interest/);
+    assert.match(calculatorRepaymentText, /25-NOV-2026/);
+    assert.match(calculatorRepaymentXml, /w:orient="landscape"/);
+    assert.match(calculatorRepaymentXml, /w:fill="D9EEF2"/);
+    assert.match(calculatorRepaymentXml, /<w:footerReference w:type="default" r:id="rId\d+"\/>/);
+    const calculatorRepaymentZip = await JSZip.loadAsync(calculatorRepaymentBuffer);
+    const repaymentFooterPath = Object.keys(calculatorRepaymentZip.files)
+      .find((filePath) => /^word\/footer\d+\.xml$/.test(filePath));
+    assert.ok(repaymentFooterPath);
+    const repaymentFooterXml = await calculatorRepaymentZip.file(repaymentFooterPath).async("string");
+    assert.match(repaymentFooterXml, /<wp:extent cx="952500" cy="314325"\/>/);
+    assert.match(repaymentFooterXml, /descr="NPF Microfinance Bank logo"/);
+    const repaymentFooterRelsPath = repaymentFooterPath.replace(/^word\//, "word/_rels/") + ".rels";
+    const repaymentFooterRelsXml = await calculatorRepaymentZip.file(repaymentFooterRelsPath).async("string");
+    const thumbnailPath = repaymentFooterRelsXml.match(/Target="media\/([^"]+)"/);
+    assert.ok(thumbnailPath);
+    assert.ok(calculatorRepaymentZip.file(`word/media/${thumbnailPath[1]}`));
+    const repaymentTableXml = findTableXml(calculatorRepaymentXml, "Repayment Date");
+    assert.ok(repaymentTableXml);
+    assert.doesNotMatch(repaymentTableXml, /₦/);
+    assert.doesNotMatch(repaymentTableXml, /Days in Period/);
+    assert.match(repaymentTableXml, /<w:tblGrid><w:gridCol w:w="1700"\/><w:gridCol w:w="1400"\/><w:gridCol w:w="1400"\/><w:gridCol w:w="1400"\/><w:gridCol w:w="850"\/>[\s\S]*?<w:gridCol w:w="950"\/><w:gridCol w:w="950"\/>/);
+    assert.ok((repaymentTableXml.match(/<w:sz w:val="17"\/>/g) || []).length >= 12);
+    assert.ok((repaymentTableXml.match(/<w:sz w:val="22"\/>/g) || []).length > 12);
+    assert.match(repaymentTableXml, /<w:top w:type="dxa" w:w="110"\/>/);
+    assert.equal((repaymentTableXml.match(/<w:tblHeader\b/g) || []).length, 1);
+    assert.doesNotMatch(repaymentTableXml, /AUTHORISED SIGNATORY/);
+    const signatoryTableXml = findTableXml(calculatorRepaymentXml, "AUTHORISED SIGNATORY");
+    assert.ok(signatoryTableXml);
+    assert.match(signatoryTableXml, /<w:tblGrid><w:gridCol w:w="3000"\/><w:gridCol w:w="9838"\/><w:gridCol w:w="3000"\/><\/w:tblGrid>/);
+    assert.match(calculatorRepaymentText, /AUTHORISED SIGNATORY\s+CUSTOMER SIGNATORY/);
+    assert.equal((signatoryTableXml.match(/<w:top\b[^>]*w:val="single"/g) || []).length, 2);
+
+    const calculatorKeyFactsBuffer = await createCalculatorDocument({
+      ...calculatorDocumentPayload,
+      documentType: "key-facts"
+    }).toBuffer();
+    const calculatorKeyFactsText = await readDocumentText(calculatorKeyFactsBuffer);
+    const calculatorKeyFactsXml = await readDocumentXml(calculatorKeyFactsBuffer);
+    assert.match(calculatorKeyFactsText, /KEY FACTS STATEMENT/);
+    assert.match(calculatorKeyFactsText, /Repayments/);
+    assert.match(calculatorKeyFactsText, /Fees and charges comprise of/);
+    assert.match(calculatorKeyFactsXml, /w:orient="portrait"/);
+    assert.match(calculatorKeyFactsXml, /w:fill="D9EEF2"/);
+    assert.doesNotMatch(calculatorKeyFactsXml, /<w:footerReference/);
+
     const sharpKeyFacts = calculateKeyFacts({
       recommendedAmount: 100000,
       durationMonths: 12,
@@ -220,7 +336,9 @@ async function readDocumentXml(buffer) {
     console.log(`Generated offer letter buffer size: ${offerLetterBuffer.length} bytes`);
     const offerLetterText = await readDocumentText(offerLetterBuffer);
     const offerLetterXml = await readDocumentXml(offerLetterBuffer);
-    assert.match(offerLetterText, /OFFER LETTER FOR Term Loan/);
+    assert.equal((offerLetterXml.match(/<w:footerReference w:type="default"/g) || []).length, 1);
+    assert.match(offerLetterXml, /w:footer="180"/);
+    assert.match(offerLetterText, /OFFER LETTER FOR Other Micro Loan/);
     assert.match(offerLetterText, /Dear Sir/);
     assert.match(offerLetterText, /One Million Naira Only/);
     assert.match(offerLetterText, /Effective Date: 24 November 2026/);
@@ -235,6 +353,7 @@ async function readDocumentXml(buffer) {
     assert.match(offerLetterText, /Total Number of Instalments: 24/);
     assert.match(offerLetterText, /Cumulative Principal Repayment/);
     assert.match(offerLetterText, /Cumulative Interest Repayment/);
+    assert.doesNotMatch(offerLetterText, /Days in Period/);
     assert.match(offerLetterText, /Interest Status/);
     assert.match(offerLetterText, /Principal Status/);
     assert.match(offerLetterText, /Loan Payment Status/);
@@ -244,14 +363,14 @@ async function readDocumentXml(buffer) {
       resolveLoanProduct(samplePayload.customer),
       samplePayload.customer.drawdownDate
     );
-    assert.ok(offerLetterText.includes(money(offerSchedule.installments[0].total)));
+    assert.ok(offerLetterText.includes(money(offerSchedule.installments[0].total).replace(/^₦/, "")));
     assert.ok(offerLetterText.includes(money(offerSchedule.totalInterest)));
     assert.ok(offerLetterText.includes(money(offerSchedule.totalRepayment)));
     assert.match(offerLetterText, /Loan Payment Status/);
     assert.match(offerLetterText, /26% per annum, calculated daily on the original principal/);
     assert.match(offerLetterText, /25 November 2026/);
     assert.match(offerLetterText, /25-NOV-2026/);
-    assert.match(offerLetterText, /₦22,082\.19/);
+    assert.match(offerLetterText, /22,082\.19/);
     assert.match(offerLetterText, /Interest for each period is calculated on the original principal/);
     assert.doesNotMatch(offerLetterText, /attached repayment schedule/i);
     assert.match(offerLetterXml, /w:orient="landscape"/);

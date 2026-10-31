@@ -113,18 +113,32 @@ footer span { padding: 0 5px; color: #c4cbce; }
 .calculator-submit { grid-column: 1 / -1; justify-self: end; }
 .calculator-error { grid-column: 1 / -1; margin: 0; color: #b34135; font-size: 12px; }
 .calculator-results[hidden] { display: none; }
+.calculator-print-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
+.calculator-print-button { min-height: 40px; padding: 0 14px; color: #16775a; border: 1px solid #9bbdaf; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px; font-weight: 600; }
+.calculator-print-button:hover { background: #f3f9f6; }
+.calculator-print-button:disabled { cursor: wait; opacity: .65; }
+.calculator-save-message { margin: 0 0 20px; font-size: 12px; }
+.calculator-save-message.success { color: #16775a; }
+.calculator-save-message.error { color: #b34135; }
+.print-document + .print-document { margin-top: 32px; padding-top: 26px; border-top: 1px solid #e8ecef; }
 .calculator-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
 .summary-item { padding: 15px; border: 1px solid #e6eaee; border-radius: 8px; background: #fbfcfc; }
 .summary-item span { display: block; color: #77838e; font-size: 10px; }
 .summary-item strong { display: block; margin-top: 7px; color: #20332f; font-family: "Manrope", sans-serif; font-size: 17px; }
 .schedule-heading { margin: 0 0 12px; color: #20332f; font-size: 13px; }
 .schedule-scroll { overflow-x: auto; }
-.schedule-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: right; white-space: nowrap; }
-.schedule-table th, .schedule-table td { padding: 10px 9px; border-bottom: 1px solid #e8ecef; }
+.schedule-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; text-align: right; white-space: nowrap; }
+.schedule-table th, .schedule-table td { padding: 13px 10px; border-bottom: 1px solid #e8ecef; }
 .schedule-table th { color: #77838e; font-weight: 600; }
 .schedule-table th:first-child, .schedule-table td:first-child,
 .schedule-table th:nth-child(2), .schedule-table td:nth-child(2) { text-align: left; }
 .schedule-table td { color: #344740; }
+.key-facts-table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
+.key-facts-table th, .key-facts-table td { padding: 11px 12px; border-bottom: 1px solid #e8ecef; text-align: left; vertical-align: top; }
+.key-facts-table th { color: #344740; font-weight: 600; }
+.key-facts-table td { color: #20332f; text-align: right; }
+.key-facts-section-row th { padding-top: 15px; color: #16775a; background: #f3f8f5; font-size: 11px; letter-spacing: .06em; }
+.key-facts-total-row th, .key-facts-total-row td { font-weight: 700; }
 .calculator-disclaimer { margin: 14px 0 0; color: #89949a; font-size: 10px; line-height: 1.5; }
 
 @media (max-width: 980px) {
@@ -176,6 +190,10 @@ footer span { padding: 0 5px; color: #c4cbce; }
   .calculator-form, .calculator-summary { grid-template-columns: minmax(0, 1fr); }
   .calculator-submit { width: 100%; }
   .summary-item strong { font-size: 16px; }
+  .calculator-print-actions { align-items: stretch; flex-direction: column; }
+  .calculator-print-button { width: 100%; }
+  .key-facts-table { font-size: 12px; }
+  .key-facts-table th, .key-facts-table td { padding: 10px 8px; }
   footer { line-height: 1.5; }
 }
 
@@ -187,4 +205,50 @@ footer span { padding: 0 5px; color: #c4cbce; }
   .panel { padding-right: 13px; padding-left: 13px; }
   .section-heading { flex-wrap: wrap; }
   .required-note { padding-top: 0; }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 11mm 10mm;
+}
+
+@media print {
+  html, body { width: 100%; min-width: 0; background: #fff !important; color: #111; }
+  .app-shell { min-height: 0; }
+  .topbar, .intro, footer { display: none !important; }
+  .calculator-main { width: 100%; margin: 0; padding: 0; }
+  #calculator-save-message,
+  body.print-repayment #calculator-results > :not(#repayment-document),
+  body.print-key-facts #calculator-results > :not(#key-facts-document) { display: none !important; }
+  body.print-repayment #calculator-results,
+  body.print-key-facts #calculator-results { display: block !important; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: #fff; box-shadow: none; }
+  body.print-repayment #repayment-document,
+  body.print-key-facts #key-facts-document { display: block !important; margin: 0; padding: 0; border: 0; }
+  .section-heading { margin-bottom: 12px; }
+  .section-heading h2 { color: #111; font-size: 18pt; }
+  .step-label { font-size: 9pt; }
+  .calculator-summary { gap: 8px; margin-bottom: 14px; }
+  .summary-item { padding: 9px; border-color: #bfc7c4; border-radius: 0; background: #fff; }
+  .summary-item span { color: #333; font-size: 9pt; }
+  .summary-item strong { margin-top: 4px; color: #111; font-size: 12pt; }
+  .schedule-heading { margin-bottom: 7px; color: #111; font-size: 11pt; }
+  .schedule-scroll { overflow: visible; }
+  .schedule-table { width: 100%; min-width: 0; table-layout: fixed; font-size: 9.5pt; }
+  .schedule-table th, .schedule-table td { padding: 6px 4px; border-color: #cbd1ce; }
+  .schedule-table th { color: #111; white-space: normal; }
+  .schedule-table th:first-child, .schedule-table td:first-child { width: 6%; }
+  .schedule-table th:nth-child(2), .schedule-table td:nth-child(2) { width: 15%; }
+  .schedule-table th:nth-child(3), .schedule-table td:nth-child(3) { width: 16%; text-align: right; }
+  .schedule-table th:nth-child(n + 4), .schedule-table td:nth-child(n + 4) { width: 15.75%; }
+  .schedule-table td { color: #111; }
+  .schedule-table thead { display: table-header-group; }
+  .schedule-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .calculator-disclaimer { margin-top: 10px; color: #333; font-size: 8.5pt; }
+  .key-facts-table { font-size: 10pt; line-height: 1.35; }
+  .key-facts-table th, .key-facts-table td { padding: 6px 8px; border-color: #cbd1ce; }
+  .key-facts-table th { width: 62%; color: #111; }
+  .key-facts-table td { color: #111; }
+  .key-facts-section-row th { padding-top: 9px; background: #e8f0ec !important; color: #111; }
+  .key-facts-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .print-document { break-inside: auto; page-break-inside: auto; }
 }

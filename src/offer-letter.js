@@ -92,6 +92,50 @@ function scheduleSummaryTable(customer, schedule) {
   });
 }
 
+function signatoryBlock() {
+  const widths = [3000, 9838, 3000];
+  const noBorder = { color: "FFFFFF", size: 0, style: BorderStyle.NIL };
+  const border = { color: "000000", size: 4, style: BorderStyle.SINGLE };
+  const borders = {
+    top: noBorder,
+    bottom: noBorder,
+    left: noBorder,
+    right: noBorder,
+    insideHorizontal: noBorder,
+    insideVertical: noBorder
+  };
+  const cell = (index, label, alignment = AlignmentType.LEFT) => new TableCell({
+    width: { size: widths[index], type: WidthType.DXA },
+    margins: { top: 70, bottom: 0, left: 0, right: 0 },
+    borders: {
+      top: index === 1 ? noBorder : border,
+      bottom: noBorder,
+      left: noBorder,
+      right: noBorder
+    },
+    children: [new Paragraph({
+      children: label
+        ? [new TextRun({ text: label, bold: true, size: 16, color: "000000" })]
+        : [],
+      alignment,
+      spacing: { before: 0, after: 0, line: 200 }
+    })]
+  });
+  return [new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: widths,
+    borders,
+    rows: [new TableRow({
+      cantSplit: true,
+      children: [
+        cell(0, "AUTHORISED SIGNATORY"),
+        cell(1, ""),
+        cell(2, "CUSTOMER SIGNATORY", AlignmentType.RIGHT)
+      ]
+    })]
+  })];
+}
+
 function repaymentScheduleTable(schedule) {
   const headers = [
     "Repayment Date",
@@ -107,8 +151,9 @@ function repaymentScheduleTable(schedule) {
     "Principal Status",
     "Loan Payment Status"
   ];
-  const widths = [1200, 1400, 1400, 1400, 600, 1300, 1500, 1500, 1500, 800, 800, 2438];
+  const widths = [1700, 1400, 1400, 1400, 850, 1400, 1400, 1400, 1400, 950, 950, 1588];
   const border = { style: BorderStyle.SINGLE, size: 4, color: "202020" };
+  const scheduleMoney = (amount) => money(amount).replace(/^₦/, "");
   let cumulativePrincipal = 0;
   let cumulativeInterest = 0;
   let cumulativeTotal = 0;
@@ -118,11 +163,11 @@ function repaymentScheduleTable(schedule) {
       children: headers.map((text, index) => new TableCell({
         width: { size: widths[index], type: WidthType.DXA },
         shading: { fill: "D9EEF2" },
-        margins: { top: 45, bottom: 45, left: 35, right: 35 },
+        margins: { top: 110, bottom: 110, left: 50, right: 50 },
         children: [new Paragraph({
-          children: [new TextRun({ text, bold: true, size: 13, color: "000000" })],
+          children: [new TextRun({ text, bold: true, size: 17, color: "000000" })],
           alignment: AlignmentType.CENTER,
-          spacing: { before: 0, after: 0, line: 180 }
+          spacing: { before: 0, after: 0, line: 200 }
         })]
       }))
     }),
@@ -132,14 +177,14 @@ function repaymentScheduleTable(schedule) {
       cumulativeTotal = roundCurrency(cumulativeTotal + installment.total);
       const values = [
         formatScheduleDate(installment.dueDate),
-        money(installment.principal),
-        money(installment.interest),
-        money(installment.total),
+        scheduleMoney(installment.principal),
+        scheduleMoney(installment.interest),
+        scheduleMoney(installment.total),
         schedule.installments.length - index,
-        money(installment.outstandingPrincipal),
-        money(cumulativeTotal),
-        money(cumulativePrincipal),
-        money(cumulativeInterest),
+        scheduleMoney(installment.outstandingPrincipal),
+        scheduleMoney(cumulativeTotal),
+        scheduleMoney(cumulativePrincipal),
+        scheduleMoney(cumulativeInterest),
         "O",
         "O",
         "O"
@@ -148,36 +193,35 @@ function repaymentScheduleTable(schedule) {
         cantSplit: true,
         children: values.map((value, cellIndex) => new TableCell({
           width: { size: widths[cellIndex], type: WidthType.DXA },
-          margins: { top: 35, bottom: 35, left: 35, right: 35 },
+          margins: { top: 110, bottom: 110, left: 50, right: 50 },
           children: [new Paragraph({
-            children: [new TextRun({ text: String(value), size: 12, color: "000000" })],
-            spacing: { before: 0, after: 0, line: 180 }
+            children: [new TextRun({ text: String(value), size: 22, color: "000000" })],
+            spacing: { before: 0, after: 0, line: 240 }
           })]
         }))
       });
     }),
     new TableRow({
-      tableHeader: true,
       children: [
         "Totals",
-        money(schedule.principal),
-        money(schedule.totalInterest),
-        money(schedule.totalRepayment),
+        scheduleMoney(schedule.principal),
+        scheduleMoney(schedule.totalInterest),
+        scheduleMoney(schedule.totalRepayment),
         "",
-        money(schedule.installments[schedule.installments.length - 1].outstandingPrincipal),
-        money(schedule.totalRepayment),
-        money(cumulativePrincipal),
-        money(cumulativeInterest),
+        scheduleMoney(schedule.installments[schedule.installments.length - 1].outstandingPrincipal),
+        scheduleMoney(schedule.totalRepayment),
+        scheduleMoney(cumulativePrincipal),
+        scheduleMoney(cumulativeInterest),
         "",
         "",
         ""
       ].map((value, index) => new TableCell({
         width: { size: widths[index], type: WidthType.DXA },
         shading: { fill: "D9EEF2" },
-        margins: { top: 45, bottom: 45, left: 35, right: 35 },
+        margins: { top: 110, bottom: 110, left: 50, right: 50 },
         children: [new Paragraph({
-          children: [new TextRun({ text: value, bold: true, size: 12, color: "000000" })],
-          spacing: { before: 0, after: 0, line: 180 }
+          children: [new TextRun({ text: value, bold: true, size: 22, color: "000000" })],
+          spacing: { before: 0, after: 0, line: 240 }
         })]
       }))
     })
@@ -251,28 +295,7 @@ function createOfferLetter(customer, guarantors, repayment, schedule) {
       addParagraph("Interest for each period is calculated on the original principal: original principal × 26% × actual days in the period ÷ 365 (or ÷ 366 in a leap year). The interest amount changes with the number of days in each period; monthly principal payments remain fixed.")
     ]),
     repaymentScheduleTable(schedule),
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      columnWidths: [5000, 5000],
-      rows: [new TableRow({
-        children: ["AUTHORISED SIGNATORY", "CUSTOMER SIGNATORY"].map((text) => new TableCell({
-          width: { size: 5000, type: WidthType.DXA },
-          margins: { top: 220, bottom: 0, left: 200, right: 200 },
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: "________________________________________", size: 16, color: "000000" })],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 0, after: 40 }
-            }),
-            new Paragraph({
-              children: [new TextRun({ text, bold: true, size: 16, color: "000000" })],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 0, after: 0 }
-            })
-          ]
-        }))
-      })]
-    })
+    ...signatoryBlock()
   ];
   const terms = [
     heading("Early Liquidation terms"),
@@ -303,4 +326,13 @@ function createOfferLetter(customer, guarantors, repayment, schedule) {
   ];
 }
 
-module.exports = { createOfferLetter };
+function createRepaymentSchedule(customer, schedule) {
+  return [
+    centeredTitle("LOAN REPAYMENT SCHEDULE"),
+    scheduleSummaryTable(customer, schedule),
+    repaymentScheduleTable(schedule),
+    ...signatoryBlock()
+  ];
+}
+
+module.exports = { createOfferLetter, createRepaymentSchedule };

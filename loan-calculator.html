@@ -59,7 +59,7 @@
             </label>
             <label class="field">
               <span>Loan start date</span>
-              <input id="loan-start-date" name="startDate" type="date" required />
+              <input id="loan-start-date" name="startDate" type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." required />
             </label>
             <p class="calculator-hint" id="product-hint">Term Loan: 26% per annum on the original principal; interest varies by days in each period. Maximum 24 months.</p>
             <p class="calculator-error" id="calculator-error" role="alert" hidden></p>
@@ -70,39 +70,63 @@
         </form>
 
         <section id="calculator-results" class="panel calculator-results" aria-live="polite" hidden>
-          <div class="section-heading">
-            <div>
-              <div class="step-label">SIMULATION RESULTS</div>
-              <h2 id="result-title">Repayment summary</h2>
+          <div class="calculator-print-actions" aria-label="Save or print loan documents">
+            <button class="calculator-print-button" type="button" data-save-target="repayment">Save repayment as Word</button>
+            <button class="calculator-print-button" type="button" data-print-target="repayment">Print loan repayment</button>
+            <button class="calculator-print-button" type="button" data-save-target="key-facts">Save Key Facts as Word</button>
+            <button class="calculator-print-button" type="button" data-print-target="key-facts">Print Key Facts</button>
+          </div>
+          <p id="calculator-save-message" class="calculator-save-message" role="status" aria-live="polite" hidden></p>
+          <section id="repayment-document" class="print-document" aria-labelledby="result-title">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">SIMULATION RESULTS</div>
+                <h2 id="result-title">Repayment summary</h2>
+              </div>
             </div>
-          </div>
-          <div class="calculator-summary">
-            <div class="summary-item"><span>Average monthly repayment</span><strong id="average-repayment"></strong></div>
-            <div class="summary-item"><span>Total interest</span><strong id="total-interest"></strong></div>
-            <div class="summary-item"><span>Total repayment</span><strong id="total-repayment"></strong></div>
-          </div>
-          <h3 class="schedule-heading">Estimated repayment schedule</h3>
-          <div class="schedule-scroll">
-            <table class="schedule-table">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">Due date</th>
-                  <th scope="col">Principal</th>
-                  <th scope="col">Interest</th>
-                  <th scope="col">Payment</th>
-                  <th scope="col">Balance</th>
-                </tr>
-              </thead>
-              <tbody id="schedule-body"></tbody>
+            <div class="calculator-summary">
+              <div class="summary-item"><span>Average monthly repayment</span><strong id="average-repayment"></strong></div>
+              <div class="summary-item"><span>Total interest</span><strong id="total-interest"></strong></div>
+              <div class="summary-item"><span>Total repayment</span><strong id="total-repayment"></strong></div>
+            </div>
+            <h3 class="schedule-heading">Estimated repayment schedule</h3>
+            <div class="schedule-scroll">
+              <table class="schedule-table">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Due date</th>
+                    <th scope="col">Days</th>
+                    <th scope="col">Principal</th>
+                    <th scope="col">Interest</th>
+                    <th scope="col">Payment</th>
+                    <th scope="col">Balance</th>
+                  </tr>
+                </thead>
+                <tbody id="schedule-body"></tbody>
+              </table>
+            </div>
+            <p class="calculator-disclaimer">The repayment schedule is calculated from the selected loan start date. Estimates exclude fees and charges shown in a Key Facts Statement. Actual terms and repayments may differ.</p>
+          </section>
+
+          <section id="key-facts-document" class="print-document key-facts-document" aria-labelledby="key-facts-title">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">LOAN DISCLOSURE</div>
+                <h2 id="key-facts-title">Key Facts Statement</h2>
+              </div>
+            </div>
+            <table class="key-facts-table">
+              <tbody id="key-facts-body"></tbody>
             </table>
-          </div>
-          <p class="calculator-disclaimer">The repayment schedule is calculated from the selected loan start date. Estimates exclude fees and charges shown in a Key Facts Statement. Actual terms and repayments may differ.</p>
+            <p class="calculator-disclaimer">Repayment figures are estimates based on the selected loan details and actual repayment dates. Fees and charges are disclosed separately from principal and interest repayments. Confirm all terms and charges before issuing a loan offer.</p>
+          </section>
         </section>
 
         <footer>NPF Management System <span>•</span> Independent repayment estimate</footer>
       </main>
     </div>
+    <script src="src/date-utils.js"></script>
     <script src="src/loan-calculations.js"></script>
     <script src="loan-calculator.js"></script>
   </body>

@@ -2,6 +2,13 @@ const form = document.querySelector("#loan-form");
 const guarantorList = document.querySelector("#guarantors");
 const message = document.querySelector("#form-message");
 const generateButton = document.querySelector("#generate-button");
+const {
+  calculateRetirementDate,
+  formatDateInput,
+  parseDateInput,
+  todayISODate,
+  attachDateInputValidation
+} = globalThis.npfDateUtils;
 let guarantorCount = 0;
 
 function addGuarantor() {
@@ -18,7 +25,7 @@ function addGuarantor() {
       <label class="field"><span>Account number *</span><input name="guarantorAccount" required /></label>
       <label class="field"><span>BVN *</span><input name="guarantorBvn" required inputmode="numeric" /></label>
       <label class="field"><span>Phone number *</span><input name="guarantorPhone" required type="tel" /></label>
-      <label class="field"><span>Retirement date *</span><input name="guarantorRetirementDate" required type="date" /></label>
+      <label class="field"><span>Retirement date *</span><input name="guarantorRetirementDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
       <label class="field"><span>Monthly salary (₦) *</span><input name="guarantorSalary" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
       <label class="field"><span>AP / Force number *</span><input name="guarantorForceNumber" required /></label>
       <label class="field"><span>Office address *</span><input name="guarantorAddress" required /></label>
@@ -51,6 +58,22 @@ function updateGuarantorHeadings() {
   });
 }
 
+function clearLoanForm() {
+  form.reset();
+  form.querySelectorAll("input").forEach((input) => {
+    input.value = "";
+    input.checked = false;
+    if (input.matches("[data-date-input]")) input.setCustomValidity("");
+  });
+  form.querySelectorAll("select").forEach((select) => {
+    select.selectedIndex = 0;
+  });
+  guarantorList.replaceChildren();
+  guarantorCount = 0;
+  addGuarantor();
+  updateLoanRules();
+}
+
 function fieldValue(name) {
   return form.elements.namedItem(name).value.trim();
 }
@@ -60,9 +83,13 @@ function amountValue(name) {
   return value === "" ? null : Number(value);
 }
 
+function dateValue(name) {
+  return parseDateInput(fieldValue(name));
+}
+
 function selectedLoanProduct(recommendedAmount) {
   if (fieldValue("loanProduct") === "Sharp Sharp") return "Sharp Sharp";
-  return recommendedAmount >= 1000000 ? "Term Loan" : "Other Micro Loan";
+  return recommendedAmount >= 1000001 ? "Term Loan" : "Other Micro Loan";
 }
 
 function updateLoanRules() {
@@ -71,7 +98,7 @@ function updateLoanRules() {
   duration.max = product === "Sharp Sharp" ? "12" : "24";
   document.querySelector("#product-category").textContent = product === "Sharp Sharp"
     ? "Sharp Sharp: ₦100,000–₦1,000,000; maximum 12 months."
-    : `${product}: maximum 24 months.`;
+    : `${product}: ${product === "Term Loan" ? "₦1,000,001 and above" : "₦1,000,000 and below"}; maximum 24 months.`;
 }
 
 function validateLoanRules(customer) {
@@ -116,9 +143,9 @@ function collectPayload() {
     bvn: fieldValue("customerBvn"),
     nin: fieldValue("customerNin"),
     forceNumber: fieldValue("customerForceNumber"),
-    dob: fieldValue("customerDob"),
-    enlistmentDate: fieldValue("enlistmentDate"),
-    retirementDate: fieldValue("customerRetirementDate"),
+    dob: dateValue("customerDob"),
+    enlistmentDate: dateValue("enlistmentDate"),
+    retirementDate: dateValue("customerRetirementDate"),
     salary: amountValue("customerSalary"),
     account: fieldValue("customerAccount"),
     id: fieldValue("customerId"),
@@ -131,9 +158,9 @@ function collectPayload() {
     durationMonths: Number(fieldValue("durationMonths")),
     loanCycle: Number(fieldValue("loanCycle")),
     mss: fieldValue("mss"),
-    dateApplied: fieldValue("dateApplied"),
-    documentDate: fieldValue("documentDate"),
-    drawdownDate: fieldValue("drawdownDate"),
+    dateApplied: dateValue("dateApplied"),
+    documentDate: dateValue("documentDate"),
+    drawdownDate: dateValue("drawdownDate"),
     appraisingOfficer: fieldValue("appraisingOfficer")
   };
 
@@ -145,7 +172,7 @@ function collectPayload() {
       account: value("guarantorAccount"),
       bvn: value("guarantorBvn"),
       phone: value("guarantorPhone"),
-      retirementDate: value("guarantorRetirementDate"),
+      retirementDate: parseDateInput(value("guarantorRetirementDate")),
       salary: Number(value("guarantorSalary").replace(/,/g, "")),
       forceNumber: value("guarantorForceNumber"),
       address: value("guarantorAddress")
@@ -168,9 +195,17 @@ form.elements.namedItem("loanProduct").addEventListener("change", updateLoanRule
 document.querySelector("#select-all").addEventListener("click", () => {
   form.querySelectorAll('input[name="templates"]').forEach((input) => { input.checked = true; });
 });
-form.elements.namedItem("dateApplied").valueAsDate = new Date();
-form.elements.namedItem("documentDate").valueAsDate = new Date();
-form.elements.namedItem("drawdownDate").valueAsDate = new Date();
+attachDateInputValidation(form);
+form.elements.namedItem("enlistmentDate").addEventListener("input", (event) => {
+  const retirementDate = calculateRetirementDate(parseDateInput(event.target.value));
+  const retirementInput = form.elements.namedItem("customerRetirementDate");
+  retirementInput.value = retirementDate ? formatDateInput(retirementDate) : "";
+  retirementInput.setCustomValidity("");
+});
+const today = formatDateInput(todayISODate());
+form.elements.namedItem("dateApplied").value = today;
+form.elements.namedItem("documentDate").value = today;
+form.elements.namedItem("drawdownDate").value = today;
 addGuarantor();
 updateLoanRules();
 
@@ -199,8 +234,15 @@ form.addEventListener("submit", async (event) => {
     if (result.canceled) {
       message.textContent = "Export canceled.";
     } else {
-      message.classList.add("success");
-      message.textContent = `Word document saved to ${result.filePath}`;
+      clearLoanForm();
+      try {
+        await window.loanDocuments.clearCache();
+        message.classList.add("success");
+        message.textContent = `Word document saved to ${result.filePath}. Form data and application cache cleared.`;
+      } catch (error) {
+        message.classList.add("error");
+        message.textContent = `Word document saved to ${result.filePath}, but the application cache could not be cleared: ${error.message || "Unknown error."} Form data was cleared.`;
+      }
     }
   } catch (error) {
     message.classList.add("error");

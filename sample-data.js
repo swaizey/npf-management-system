@@ -17,7 +17,7 @@ module.exports = {
       loanAmount: 1000000,
       recommendedAmount: 1000000,
       loanRecommended: "Yes",
-      loanProduct: "Term Loan",
+      loanProduct: "Other Micro Loan",
       purpose: "To complete building project",
       durationMonths: 24,
       loanCycle: 1,
