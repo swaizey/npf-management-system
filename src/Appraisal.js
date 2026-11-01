@@ -38,15 +38,83 @@ function resolveLoanProduct(customer) {
   return Number(customer.recommendedAmount) >= 1000001 ? "Term Loan" : "Other Micro Loan";
 }
 
+function resolveAppraisingOfficer(payload, customer) {
+  const officer = payload.appraisingOfficer ?? customer.appraisingOfficer ?? "Adigwe Patrick";
+  if (!["Adigwe Patrick", "Obilo Tochi", "Obiageli Everngeline"].includes(officer)) {
+    throw new Error("Select a valid appraising officer.");
+  }
+  return officer;
+}
+
+function validateTextField(value, label, maximumLength) {
+  if (typeof value !== "string" || !value.trim()) {
+    return `Enter a valid ${label}.`;
+  }
+  if (value.length > maximumLength) {
+    return `${label} must be ${maximumLength} characters or fewer.`;
+  }
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f)
+        || (codePoint >= 0xd800 && codePoint <= 0xdfff)
+        || codePoint === 0xfffe || codePoint === 0xffff) {
+      return `${label} contains unsupported control characters.`;
+    }
+  }
+  return "";
+}
+
+function validateCustomerText(customer) {
+  const fields = [
+    ["name", "customer name", 120],
+    ["phone", "customer phone number", 30],
+    ["bvn", "customer BVN", 11],
+    ["nin", "customer NIN", 11],
+    ["forceNumber", "customer AP / Force number", 40],
+    ["account", "customer account number", 34],
+    ["id", "customer ID", 40],
+    ["address", "customer office / service address", 250],
+    ["purpose", "loan purpose", 250],
+    ["mss", "MSS / salary source", 100]
+  ];
+  for (const [field, label, maximumLength] of fields) {
+    const error = validateTextField(customer[field], label, maximumLength);
+    if (error) return error;
+  }
+  if (!/^\d{11}$/.test(customer.bvn)) return "Enter an 11-digit customer BVN.";
+  if (!/^\d{11}$/.test(customer.nin)) return "Enter an 11-digit customer NIN.";
+  if (!/^[+\d\s().-]{7,30}$/.test(customer.phone)) {
+    return "Enter a valid customer phone number.";
+  }
+  if (!["Yes", "No"].includes(customer.loanRecommended)) {
+    return "Select whether the loan is recommended.";
+  }
+  return "";
+}
+
 function validateLoanDetails(customer) {
+  if (!customer || typeof customer !== "object" || Array.isArray(customer)) {
+    return "Enter valid customer details.";
+  }
+  const textError = validateCustomerText(customer);
+  if (textError) return textError;
   if (!["Male", "Female"].includes(customer.gender)) {
     return "Select the customer's gender.";
   }
-  if (!Number.isFinite(Number(customer.loanAmount)) || Number(customer.loanAmount) <= 0) {
+  if (!Number.isFinite(customer.loanAmount) || customer.loanAmount <= 0
+      || customer.loanAmount > Number.MAX_SAFE_INTEGER) {
     return "Enter a valid loan amount requested.";
   }
-  if (!Number.isFinite(Number(customer.recommendedAmount)) || Number(customer.recommendedAmount) <= 0) {
+  if (!Number.isFinite(customer.recommendedAmount) || customer.recommendedAmount <= 0
+      || customer.recommendedAmount > Number.MAX_SAFE_INTEGER) {
     return "Enter a valid recommended amount.";
+  }
+  if (!Number.isFinite(customer.salary) || customer.salary <= 0
+      || customer.salary > Number.MAX_SAFE_INTEGER) {
+    return "Enter a valid customer salary.";
+  }
+  if (!Number.isInteger(customer.loanCycle) || customer.loanCycle < 1 || customer.loanCycle > 100) {
+    return "Enter a valid loan cycle between 1 and 100.";
   }
   if (!isValidISODate(customer.drawdownDate)) {
     return "Enter a valid drawdown date.";
@@ -77,12 +145,40 @@ function validateLoanDetails(customer) {
 }
 
 function validateGuarantorDates(guarantors) {
-  const invalidDateIndex = guarantors.findIndex(
-    (guarantor) => !isValidISODate(guarantor.retirementDate)
-  );
-  return invalidDateIndex < 0
-    ? ""
-    : `Enter a valid retirement date for guarantor ${invalidDateIndex + 1}.`;
+  if (!Array.isArray(guarantors) || guarantors.length === 0 || guarantors.length > 50) {
+    return "Enter between 1 and 50 guarantors.";
+  }
+  for (const [index, guarantor] of guarantors.entries()) {
+    if (!guarantor || typeof guarantor !== "object" || Array.isArray(guarantor)) {
+      return `Enter valid details for guarantor ${index + 1}.`;
+    }
+    const fields = [
+      ["name", "name", 120],
+      ["account", "account number", 34],
+      ["bvn", "BVN", 11],
+      ["phone", "phone number", 30],
+      ["forceNumber", "AP / Force number", 40],
+      ["address", "office address", 250]
+    ];
+    for (const [field, label, maximumLength] of fields) {
+      const error = validateTextField(guarantor[field], `guarantor ${index + 1} ${label}`, maximumLength);
+      if (error) return error;
+    }
+    if (!/^\d{11}$/.test(guarantor.bvn)) {
+      return `Enter an 11-digit BVN for guarantor ${index + 1}.`;
+    }
+    if (!/^[+\d\s().-]{7,30}$/.test(guarantor.phone)) {
+      return `Enter a valid phone number for guarantor ${index + 1}.`;
+    }
+    if (!Number.isFinite(guarantor.salary) || guarantor.salary <= 0
+        || guarantor.salary > Number.MAX_SAFE_INTEGER) {
+      return `Enter a valid salary for guarantor ${index + 1}.`;
+    }
+    if (!isValidISODate(guarantor.retirementDate)) {
+      return `Enter a valid retirement date for guarantor ${index + 1}.`;
+    }
+  }
+  return "";
 }
 
 function guarantorTable(guarantors) {
@@ -250,13 +346,21 @@ function createAppraisal(customer, guarantors, appraisingOfficer) {
 }
 
 function createLoanDocument(payload, templates) {
+  if (!payload || typeof payload !== "object" || !payload.customer) {
+    throw new Error("The document details are incomplete.");
+  }
   const customer = { ...payload.customer, loanProduct: resolveLoanProduct(payload.customer) };
   const { guarantors } = payload;
   const validationError = validateLoanDetails(customer);
   if (validationError) throw new Error(validationError);
   const guarantorDateError = validateGuarantorDates(guarantors);
   if (guarantorDateError) throw new Error(guarantorDateError);
-  const appraisingOfficer = payload.appraisingOfficer || "Adigwe Patrick";
+  const appraisingOfficer = resolveAppraisingOfficer(payload, customer);
+  const allowedTemplates = ["appraisal", "circ", "offer", "keyfact"];
+  if (!Array.isArray(templates) || templates.length === 0
+      || [...templates].some((template) => !allowedTemplates.includes(template))) {
+    throw new Error("Select at least one valid document to generate.");
+  }
   const repayment = calculateMonthlyRepayment(
     customer.recommendedAmount,
     customer.durationMonths,
@@ -338,6 +442,7 @@ function createLoanDocument(payload, templates) {
 
 module.exports = {
   resolveLoanProduct,
+  resolveAppraisingOfficer,
   validateLoanDetails,
   validateGuarantorDates,
   calculateMonthlyRepayment,

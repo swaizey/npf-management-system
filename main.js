@@ -3,6 +3,7 @@ const path = require("node:path");
 const {
   createLoanDocument,
   resolveLoanProduct,
+  resolveAppraisingOfficer,
   validateGuarantorDates,
   validateLoanDetails
 } = require("./src/Appraisal");
@@ -31,7 +32,9 @@ function createWindow() {
 }
 
 ipcMain.handle("documents:save", async (_event, payload) => {
-  if (!payload || !payload.customer || !Array.isArray(payload.guarantors) || !Array.isArray(payload.templates)) {
+  if (!payload || typeof payload !== "object"
+      || !payload.customer || typeof payload.customer !== "object" || Array.isArray(payload.customer)
+      || !Array.isArray(payload.guarantors) || !Array.isArray(payload.templates)) {
     throw new Error("The document details are incomplete.");
   }
 
@@ -40,11 +43,13 @@ ipcMain.handle("documents:save", async (_event, payload) => {
   if (validationError) throw new Error(validationError);
   const guarantorDateError = validateGuarantorDates(payload.guarantors);
   if (guarantorDateError) throw new Error(guarantorDateError);
+  resolveAppraisingOfficer(payload, customer);
 
-  const templates = payload.templates.filter((template) =>
-    ["appraisal", "circ", "offer", "keyfact"].includes(template)
-  );
-  if (templates.length === 0) {
+  const allowedTemplates = ["appraisal", "circ", "offer", "keyfact"];
+  const templates = payload.templates;
+  if (templates.length === 0 || templates.length > allowedTemplates.length
+      || [...templates].some((template) => !allowedTemplates.includes(template))
+      || new Set(templates).size !== templates.length) {
     throw new Error("Select at least one document to generate.");
   }
 

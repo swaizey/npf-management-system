@@ -76,6 +76,7 @@ function findTableXml(xml, text) {
     assert.equal(validateDateInput(dateInput), true);
 
     const sharpSharp = {
+      ...samplePayload.customer,
       gender: "Male",
       loanAmount: 100000,
       recommendedAmount: 100000,
@@ -89,11 +90,29 @@ function findTableXml(xml, text) {
       drawdownDate: "2026-10-25"
     };
     assert.equal(validateLoanDetails(sharpSharp), "");
+    assert.equal(validateLoanDetails(samplePayload.customer), "");
     assert.match(validateLoanDetails({ ...sharpSharp, gender: "" }), /gender/);
+    assert.match(validateLoanDetails({ ...sharpSharp, name: "Ada\u0001Nwosu" }), /control characters/);
+    assert.match(validateLoanDetails({ ...sharpSharp, phone: "script>alert" }), /phone number/);
+    assert.match(validateLoanDetails({ ...sharpSharp, bvn: "not-a-bvn" }), /11-digit/);
+    assert.match(validateLoanDetails({ ...sharpSharp, salary: "190000" }), /salary/);
     assert.match(validateLoanDetails({ ...sharpSharp, drawdownDate: "2026-02-31" }), /drawdown date/);
     assert.match(validateLoanDetails({ ...sharpSharp, documentDate: "2026-13-01" }), /appraisal \/ offer date/);
-    assert.equal(validateGuarantorDates([{ retirementDate: "2025-04-22" }]), "");
-    assert.match(validateGuarantorDates([{ retirementDate: "2025-13-01" }]), /guarantor 1/);
+    assert.equal(validateGuarantorDates(samplePayload.guarantors), "");
+    assert.match(validateGuarantorDates([{ ...samplePayload.guarantors[0], retirementDate: "2025-13-01" }]), /guarantor 1/);
+    assert.match(validateGuarantorDates([{ ...samplePayload.guarantors[0], address: "Office\u0000address" }]), /control characters/);
+    assert.match(validateGuarantorDates([]), /between 1 and 50/);
+    assert.throws(
+      () => createLoanDocument({
+        ...samplePayload,
+        customer: { ...samplePayload.customer, appraisingOfficer: "Unknown Officer" }
+      }, ["appraisal"]).toBuffer(),
+      /valid appraising officer/
+    );
+    assert.throws(
+      () => createLoanDocument(samplePayload, ["unexpected"]).toBuffer(),
+      /valid document/
+    );
     assert.match(validateLoanDetails({ ...sharpSharp, recommendedAmount: 99999 }), /between/);
     assert.match(validateLoanDetails({ ...sharpSharp, recommendedAmount: 1000001 }), /between/);
     assert.match(validateLoanDetails({ ...sharpSharp, durationMonths: 13 }), /between 1 and 12/);
@@ -413,6 +432,15 @@ function findTableXml(xml, text) {
     assert.match(appraisalXml, /w:insideH/);
     assert.equal((appraisalXml.match(/w:type="page"/g) || []).length, 1);
     assert.match(appraisalXml, /w:w="3600"/);
+    const injectionPayload = {
+      ...samplePayload,
+      customer: { ...samplePayload.customer, name: "<script>alert(1)</script>" }
+    };
+    const injectionXml = await readDocumentXml(
+      await createLoanDocument(injectionPayload, ["appraisal"]).toBuffer()
+    );
+    assert.match(injectionXml, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+    assert.doesNotMatch(injectionXml, /<script>alert\(1\)<\/script>/);
     const appraisalParagraphs = appraisalXml.split("</w:p>").map((paragraph) => paragraph.replace(/<[^>]+>/g, " "));
     assert.ok(appraisalParagraphs.some((paragraph) => paragraph.includes("(1) Remittance of monthly salary through the bank.")));
     assert.ok(appraisalParagraphs.some((paragraph) => paragraph.includes("(2) Personal Guarantor")));
@@ -421,8 +449,8 @@ function findTableXml(xml, text) {
       customer: { ...samplePayload.customer, address: "12 Example Street", mss: "NPF Payroll" }
     }, ["appraisal"]).toBuffer();
     const addressAppraisalText = await readDocumentText(addressAppraisalBuffer);
-    assert.match(addressAppraisalText, /CUSTOMER ADDRESS: 12 Example Street/);
-    assert.match(addressAppraisalText, /serving member of NPF Payroll/);
+    assert.match(addressAppraisalText, /serving member of 12 Example Street/);
+    assert.match(addressAppraisalText, /received directly from NPF Payroll/);
     const allTemplatesBuffer = await createLoanDocument(samplePayload, ["appraisal", "offer", "keyfact"]).toBuffer();
     const allTemplatesXml = await readDocumentXml(allTemplatesBuffer);
     assert.equal((allTemplatesXml.match(/w:type="page"/g) || []).length, 1);
