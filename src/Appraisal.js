@@ -380,14 +380,28 @@ function createLoanDocument(payload, templates) {
       sections.push({ orientation: PageOrientation.PORTRAIT, children: createAppraisal(customer, guarantors, appraisingOfficer) });
     }
     if (template === "circ") {
+        addParagraph(),
+        addParagraph(),
+        addParagraph(),
       sections.push({ orientation: PageOrientation.PORTRAIT, children: [
-        new Paragraph({ children: [new TextRun({ text: "C.I.R.C COMMENT SHEET", bold: true, size: 22, color: "000000" })], alignment: AlignmentType.CENTER, spacing: { before: 100, after: 200 } }),
+        new Paragraph({ children: [new TextRun({ text: "C.I.R.C COMMENT SHEET", bold: true, size: 25, color: "000000" })], alignment: AlignmentType.CENTER, spacing: { before: 100, after: 200 } }),
+
         labelValue("TO", "BRANCH MANAGER, ONITSHA", true),
+        addParagraph(),
         labelValue("FROM", "HEAD OF CREDIT, ONITSHA", true),
+        addParagraph(),
+
         labelValue("SUBJECT", `APPRAISAL OF ${money(customer.loanAmount)} LOAN FACILITY FOR ${customer.name}`, true),
+        addParagraph(),
         labelValue("AMT.APP", money(customer.loanAmount), true),
+        addParagraph(),
+
         labelValue("AMT. REC.", money(customer.recommendedAmount), true),
+        addParagraph(),
+
         labelValue("DATE:", displayDocumentDate(customer.documentDate), true),
+        addParagraph(),
+
         addParagraph("Kindly comments on the loan to enable us advise the customer accordingly.", { spacing: { before: 350, after: 700 } }),
         addParagraph("SIGN: ________________________________________")
       ] });
