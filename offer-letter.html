@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self';"
+    />
+    <title>Create Offer Letter | NPF Management System</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-logo" src="src/logo.png" alt="NPF Microfinance Bank" />
+          <div>
+            <div class="brand-name">NPF MANAGEMENT SYSTEM</div>
+            <div class="brand-subtitle">LOAN DOCUMENT STUDIO</div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a class="topbar-link" href="index.html">All documents <span aria-hidden="true">→</span></a>
+          <a class="topbar-link" href="key-facts.html">Key Facts <span aria-hidden="true">→</span></a>
+          <div class="topbar-note"><span class="status-dot"></span> Documents stay on this device</div>
+        </div>
+      </header>
+
+      <main>
+        <section class="intro">
+          <div class="eyebrow">CREDIT OPERATIONS</div>
+          <h1>Create an offer letter</h1>
+          <p>Enter the customer, requested and approved amounts, loan dates, product, tenor, and guarantor details to create a ready-to-edit offer letter.</p>
+        </section>
+
+        <form id="offer-letter-form">
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">01 / CUSTOMER</div>
+                <h2>Customer details</h2>
+              </div>
+              <span class="required-note">* Required fields</span>
+            </div>
+            <div class="form-grid">
+              <label class="field span-2"><span>Customer full name *</span><input name="customerName" required placeholder="e.g. Ada Nwosu" /></label>
+              <label class="field"><span>Gender *</span><select name="customerGender" required><option value="">Select gender</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
+              <label class="field span-2"><span>Customer address *</span><input name="customerAddress" required /></label>
+              <label class="field"><span>Loan amount applied for (₦) *</span><input name="loanAmount" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
+              <label class="field"><span>Approved loan amount (₦) *</span><input name="approvedAmount" required type="text" inputmode="decimal" data-currency placeholder="e.g. 955,655.00" /></label>
+              <label class="field"><span>Purpose for loan *</span><input name="purpose" required placeholder="What will the facility be used for?" /></label>
+              <label class="field"><span>Loan product *</span><select name="loanProduct" required><option value="amount-based">Based on approved amount</option><option value="Sharp Sharp">Sharp Sharp</option></select></label>
+              <label class="field"><span>Tenor (months) *</span><input name="durationMonths" required type="number" min="1" max="24" value="24" /></label>
+              <label class="field"><span>Date applied *</span><input name="dateApplied" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+              <label class="field"><span>Drawdown date *</span><input name="drawdownDate" required type="text" data-date-input inputmode="text" placeholder="DD/MM/YYYY" title="Enter the date in DD/MM/YYYY format." /></label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <div class="step-label">02 / GUARANTORS</div>
+                <h2>Guarantor details</h2>
+              </div>
+              <button class="text-button" type="button" id="add-guarantor">+ Add guarantor</button>
+            </div>
+            <p class="section-description">Add at least one guarantor. You can add more if the facility requires them.</p>
+            <div id="guarantors" class="guarantor-list"></div>
+          </section>
+
+          <div class="form-footer">
+            <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+            <button class="primary-button" id="generate-button" type="submit">
+              <span>Generate offer letter</span><span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+        <footer>NPF Management System <span>•</span> Creates an editable .docx offer letter</footer>
+      </main>
+    </div>
+    <script src="src/date-utils.js"></script>
+    <script src="src/offer-letter-renderer.js"></script>
+  </body>
+</html>

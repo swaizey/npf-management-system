@@ -30,7 +30,7 @@ button, input, select { font: inherit; }
 .brand-subtitle { margin-top: 3px; color: #82908e; font-size: 9px; letter-spacing: .16em; }
 .topbar-note { display: flex; align-items: center; gap: 8px; color: #727e88; font-size: 12px; }
 .status-dot { width: 7px; height: 7px; background: #28a879; border-radius: 50%; }
-.topbar-actions { display: flex; align-items: center; gap: 24px; }
+.topbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
 .topbar-link { color: var(--green); text-decoration: none; font-size: 12px; font-weight: 600; }
 .topbar-link:hover { color: #10543f; }
 .topbar-link span { padding-left: 4px; }
@@ -121,6 +121,7 @@ footer span { padding: 0 5px; color: #c4cbce; }
 .calculator-save-message.success { color: #16775a; }
 .calculator-save-message.error { color: #b34135; }
 .print-document + .print-document { margin-top: 32px; padding-top: 26px; border-top: 1px solid #e8ecef; }
+.key-facts-only #key-facts-results { margin-top: 18px; }
 .calculator-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
 .summary-item { padding: 15px; border: 1px solid #e6eaee; border-radius: 8px; background: #fbfcfc; }
 .summary-item span { display: block; color: #77838e; font-size: 10px; }
@@ -216,6 +217,9 @@ footer span { padding: 0 5px; color: #c4cbce; }
   html, body { width: 100%; min-width: 0; background: #fff !important; color: #111; }
   .app-shell { min-height: 0; }
   .topbar, .intro, footer { display: none !important; }
+  body.key-facts-only #key-facts-form,
+  body.key-facts-only #key-facts-results > .calculator-print-actions,
+  body.key-facts-only #key-facts-results > #key-facts-message { display: none !important; }
   .calculator-main { width: 100%; margin: 0; padding: 0; }
   #calculator-save-message,
   body.print-repayment #calculator-results > :not(#repayment-document),

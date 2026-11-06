@@ -5,7 +5,9 @@ const {
   resolveLoanProduct,
   resolveAppraisingOfficer,
   validateGuarantorDates,
-  validateLoanDetails
+  validateLoanDetails,
+  validateOfferLetterDetails,
+  createOfferLetterDetailsDocument
 } = require("./src/Appraisal");
 const { createCalculatorDocument } = require("./src/calculator-documents");
 
@@ -70,6 +72,26 @@ ipcMain.handle("documents:save", async (_event, payload) => {
 
   const document = createLoanDocument({ ...payload, customer }, templates);
   const buffer = await document.toBuffer();
+  await require("node:fs/promises").writeFile(filePath, buffer);
+  return { canceled: false, filePath };
+});
+
+ipcMain.handle("offer-letter:save", async (event, payload) => {
+  const validationError = validateOfferLetterDetails(payload?.customer, payload?.guarantors);
+  if (validationError) throw new Error(validationError);
+
+  const safeCustomerName = payload.customer.name
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  const { filePath, canceled } = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: "Save offer letter",
+    defaultPath: `${safeCustomerName || "Customer"} - Offer Letter.docx`,
+    filters: [{ name: "Word document", extensions: ["docx"] }]
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  const buffer = await createOfferLetterDetailsDocument(payload.customer, payload.guarantors).toBuffer();
   await require("node:fs/promises").writeFile(filePath, buffer);
   return { canceled: false, filePath };
 });

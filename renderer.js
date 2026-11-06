@@ -2,6 +2,7 @@ const form = document.querySelector("#loan-form");
 const guarantorList = document.querySelector("#guarantors");
 const message = document.querySelector("#form-message");
 const generateButton = document.querySelector("#generate-button");
+const generateButtonLabel = generateButton.querySelector("span").textContent;
 const {
   calculateRetirementDate,
   formatDateInput,
@@ -179,7 +180,9 @@ function collectPayload() {
     };
   });
 
-  const templates = [...form.querySelectorAll('input[name="templates"]:checked')].map((input) => input.value);
+  const templates = form.dataset.template
+    ? [form.dataset.template]
+    : [...form.querySelectorAll('input[name="templates"]:checked')].map((input) => input.value);
   return { customer, guarantors, templates };
 }
 
@@ -192,7 +195,7 @@ form.addEventListener("focusout", (event) => {
 });
 form.elements.namedItem("recommendedAmount").addEventListener("input", updateLoanRules);
 form.elements.namedItem("loanProduct").addEventListener("change", updateLoanRules);
-document.querySelector("#select-all").addEventListener("click", () => {
+document.querySelector("#select-all")?.addEventListener("click", () => {
   form.querySelectorAll('input[name="templates"]').forEach((input) => { input.checked = true; });
 });
 attachDateInputValidation(form);
@@ -249,6 +252,6 @@ form.addEventListener("submit", async (event) => {
     message.textContent = error.message || "Could not create the Word document.";
   } finally {
     generateButton.disabled = false;
-    generateButton.querySelector("span").textContent = "Generate Word document";
+    generateButton.querySelector("span").textContent = generateButtonLabel;
   }
 });

@@ -181,6 +181,65 @@ function validateGuarantorDates(guarantors) {
   return "";
 }
 
+function validateOfferLetterDetails(customer, guarantors) {
+  if (!customer || typeof customer !== "object" || Array.isArray(customer)) {
+    return "Enter valid customer details.";
+  }
+  for (const [field, label, maximumLength] of [
+    ["name", "customer name", 120],
+    ["address", "customer address", 250],
+    ["purpose", "loan purpose", 250]
+  ]) {
+    const error = validateTextField(customer[field], label, maximumLength);
+    if (error) return error;
+  }
+  if (!["Male", "Female"].includes(customer.gender)) {
+    return "Select the customer's gender.";
+  }
+  if (!Number.isFinite(customer.loanAmount) || customer.loanAmount <= 0
+      || customer.loanAmount > Number.MAX_SAFE_INTEGER) {
+    return "Enter a valid loan amount applied for.";
+  }
+  if (!Number.isFinite(customer.approvedAmount) || customer.approvedAmount <= 0
+      || customer.approvedAmount > Number.MAX_SAFE_INTEGER) {
+    return "Enter a valid approved loan amount.";
+  }
+  if (!["amount-based", "Term Loan", "Other Micro Loan", "Sharp Sharp"].includes(customer.loanProduct)) {
+    return "Select a valid loan product.";
+  }
+  const maximumDuration = customer.loanProduct === "Sharp Sharp" ? 12 : 24;
+  if (!Number.isInteger(customer.durationMonths) || customer.durationMonths < 1
+      || customer.durationMonths > maximumDuration) {
+    return `Loan tenor must be between 1 and ${maximumDuration} months.`;
+  }
+  if (customer.loanProduct === "Sharp Sharp"
+      && (customer.approvedAmount < 100000 || customer.approvedAmount > 1000000)) {
+    return "Sharp Sharp approved amounts must be between ₦100,000.00 and ₦1,000,000.00.";
+  }
+  if (!isValidISODate(customer.drawdownDate)) {
+    return "Enter a valid date the loan was given.";
+  }
+  if (!isValidISODate(customer.dateApplied)) {
+    return "Enter a valid date applied.";
+  }
+  if (!Array.isArray(guarantors) || guarantors.length === 0 || guarantors.length > 50) {
+    return "Enter between 1 and 50 guarantors.";
+  }
+  for (const [index, guarantor] of guarantors.entries()) {
+    if (!guarantor || typeof guarantor !== "object" || Array.isArray(guarantor)) {
+      return `Enter valid details for guarantor ${index + 1}.`;
+    }
+    for (const [field, label, maximumLength] of [
+      ["name", "name", 120],
+      ["account", "account number", 34]
+    ]) {
+      const error = validateTextField(guarantor[field], `guarantor ${index + 1} ${label}`, maximumLength);
+      if (error) return error;
+    }
+  }
+  return "";
+}
+
 function guarantorTable(guarantors) {
   const headers = ["S/N", "Name", "Account number", "Office address", "BVN", "Phone", "Retirement"];
   const widths = [500, 1450, 1400, 2150, 1150, 1250, 2206];
@@ -454,14 +513,50 @@ function createLoanDocument(payload, templates) {
   });
 }
 
+function createOfferLetterDetailsDocument(customer, guarantors) {
+  const validationError = validateOfferLetterDetails(customer, guarantors);
+  if (validationError) throw new Error(validationError);
+  const children = createOfferLetter(customer, guarantors)[0].children;
+  const document = new Document({
+    creator: "NPF Microfinance Bank Plc",
+    title: `Offer letter - ${customer.name}`,
+    description: "Offer letter with customer, loan, and guarantor details",
+    styles: {
+      default: {
+        document: {
+          run: { font: "Arial", size: 22, color: "000000" },
+          paragraph: { spacing: { line: 280, after: 140 }, widowControl: true }
+        },
+        headings: {
+          title: { run: { font: "Arial", size: 28, bold: true, color: "153B36" }, paragraph: { spacing: { before: 160, after: 240 } } },
+          heading1: { run: { font: "Arial", size: 24, bold: true, color: "153B36" }, paragraph: { spacing: { before: 260, after: 140 } } },
+          heading2: { run: { font: "Arial", size: 22, bold: true, color: "153B36" }, paragraph: { spacing: { before: 200, after: 120 } } }
+        }
+      }
+    },
+    sections: [{
+      properties: {
+        page: {
+          size: { width: 11906, height: 16838, orientation: PageOrientation.PORTRAIT },
+          margin: { top: 1000, right: 900, bottom: 1000, left: 900 }
+        }
+      },
+      children
+    }]
+  });
+  return { toBuffer: () => Packer.toBuffer(document) };
+}
+
 module.exports = {
   resolveLoanProduct,
   resolveAppraisingOfficer,
   validateLoanDetails,
   validateGuarantorDates,
+  validateOfferLetterDetails,
   calculateMonthlyRepayment,
   calculateKeyFacts,
   createLoanDocument: (payload, templates) => ({
     toBuffer: () => Packer.toBuffer(createLoanDocument(payload, templates))
-  })
+  }),
+  createOfferLetterDetailsDocument
 };

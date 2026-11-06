@@ -216,6 +216,7 @@ const loanCalculations = {
   calculateLoanSchedule,
   calculateMonthlyRepayment,
   calculateOfferLetterValues,
+  addMonths,
   formatScheduleDate,
   roundCurrency
 };

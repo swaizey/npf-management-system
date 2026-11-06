@@ -3,11 +3,13 @@ const JSZip = require("jszip");
 const {
   calculateMonthlyRepayment,
   createLoanDocument,
+  createOfferLetterDetailsDocument,
   resolveLoanProduct,
   validateGuarantorDates,
-  validateLoanDetails
+  validateLoanDetails,
+  validateOfferLetterDetails
 } = require("./src/Appraisal");
-const { calculateKeyFacts, calculateLoanSchedule, formatScheduleDate } = require("./src/loan-calculations");
+const { addMonths, calculateKeyFacts, calculateLoanSchedule, formatScheduleDate } = require("./src/loan-calculations");
 const { createCalculatorDocument } = require("./src/calculator-documents");
 const {
   formatDateInput,
@@ -57,6 +59,7 @@ function findTableXml(xml, text) {
     assert.equal(parseDateInput("29/02/2024"), "2024-02-29");
     assert.equal(parseDateInput("29/02/2025"), null);
     assert.equal(formatDateInput("2025-04-22"), "22/04/2025");
+    assert.equal(addMonths(new Date("2026-01-31T00:00:00Z"), 1).toISOString().slice(0, 10), "2026-02-28");
     assert.equal(isValidISODate("2025-13-01"), false);
     assert.equal(calculateRetirementDate("2000-04-22"), "2035-04-22");
     assert.equal(calculateRetirementDate("1996-02-29"), "2031-02-28");
@@ -102,6 +105,27 @@ function findTableXml(xml, text) {
     assert.match(validateGuarantorDates([{ ...samplePayload.guarantors[0], retirementDate: "2025-13-01" }]), /guarantor 1/);
     assert.match(validateGuarantorDates([{ ...samplePayload.guarantors[0], address: "Office\u0000address" }]), /control characters/);
     assert.match(validateGuarantorDates([]), /between 1 and 50/);
+    const simpleOfferCustomer = {
+      name: "Ada Nwosu",
+      address: "12 Example Road, Lagos",
+      gender: "Female",
+      purpose: "business expansion",
+      loanAmount: 250000,
+      approvedAmount: 250000,
+      loanProduct: "amount-based",
+      durationMonths: 24,
+      dateApplied: "2026-10-20",
+      drawdownDate: "2026-10-25"
+    };
+    const simpleOfferGuarantors = [
+      { name: "Chika Obi", account: "00123456789" },
+      { name: "Tunde Ayo", account: "00987654321" }
+    ];
+    assert.equal(validateOfferLetterDetails(simpleOfferCustomer, simpleOfferGuarantors), "");
+    assert.match(validateOfferLetterDetails({ ...simpleOfferCustomer, approvedAmount: 0 }, simpleOfferGuarantors), /approved loan amount/);
+    assert.match(validateOfferLetterDetails(simpleOfferCustomer, [{ name: "Chika Obi", account: "" }]), /account number/);
+    assert.match(validateOfferLetterDetails({ ...simpleOfferCustomer, durationMonths: 25 }, simpleOfferGuarantors), /between 1 and 24/);
+    assert.match(validateOfferLetterDetails({ ...simpleOfferCustomer, loanProduct: "Sharp Sharp", durationMonths: 13 }, simpleOfferGuarantors), /between 1 and 12/);
     assert.throws(
       () => createLoanDocument({
         ...samplePayload,
@@ -355,49 +379,76 @@ function findTableXml(xml, text) {
     console.log(`Generated offer letter buffer size: ${offerLetterBuffer.length} bytes`);
     const offerLetterText = await readDocumentText(offerLetterBuffer);
     const offerLetterXml = await readDocumentXml(offerLetterBuffer);
-    assert.equal((offerLetterXml.match(/<w:footerReference w:type="default"/g) || []).length, 1);
-    assert.match(offerLetterXml, /w:footer="180"/);
-    assert.match(offerLetterText, /OFFER LETTER FOR Other Micro Loan/);
+    assert.doesNotMatch(offerLetterXml, /<w:footerReference/);
+    assert.match(offerLetterText, /OFFER LETTER FOR OTHER MICRO LOAN/);
     assert.match(offerLetterText, /Dear Sir/);
     assert.match(offerLetterText, /One Million Naira Only/);
-    assert.match(offerLetterText, /Effective Date: 24 November 2026/);
-    assert.match(offerLetterText, /Expiry Date: 24 November 2028/);
-    assert.match(offerLetterText, /VAT 7\.5% of Management Processing fee \(₦750\.00\)/);
+    assert.match(offerLetterText, /Date: - 25th October, 2026/);
+    assert.match(offerLetterText, /Effective Date:- 25th November, 2026/);
+    assert.match(offerLetterText, /Expiry Date:- 25th November, 2028/);
+    assert.match(offerLetterText, /VAT 7\.5% of Mgt\. Processing fee \(₦750\.00\)/);
     assert.match(offerLetterText, /3% Mandatory Saving Deposit \(₦30,000\.00\)/);
-    assert.match(offerLetterText, /LOAN CALCULATION/);
-    assert.match(offerLetterText, /Account Number: 00205698645/);
-    assert.match(offerLetterText, /Settlement Account: 00205698645/);
-    assert.match(offerLetterText, /First Payment Date: 25 November 2026/);
-    assert.match(offerLetterText, /Account Title: Ken Obi/);
-    assert.match(offerLetterText, /Total Number of Instalments: 24/);
-    assert.match(offerLetterText, /Cumulative Principal Repayment/);
-    assert.match(offerLetterText, /Cumulative Interest Repayment/);
-    assert.doesNotMatch(offerLetterText, /Days in Period/);
-    assert.match(offerLetterText, /Interest Status/);
-    assert.match(offerLetterText, /Principal Status/);
-    assert.match(offerLetterText, /Loan Payment Status/);
+    assert.match(offerLetterText, /Credit Bureau Report fee ₦1,000\.00/);
     const offerSchedule = calculateLoanSchedule(
       samplePayload.customer.recommendedAmount,
       samplePayload.customer.durationMonths,
       resolveLoanProduct(samplePayload.customer),
       samplePayload.customer.drawdownDate
     );
-    assert.ok(offerLetterText.includes(money(offerSchedule.installments[0].total).replace(/^₦/, "")));
-    assert.ok(offerLetterText.includes(money(offerSchedule.totalInterest)));
-    assert.ok(offerLetterText.includes(money(offerSchedule.totalRepayment)));
-    assert.match(offerLetterText, /Loan Payment Status/);
-    assert.match(offerLetterText, /26% per annum, calculated daily on the original principal/);
-    assert.match(offerLetterText, /25 November 2026/);
-    assert.match(offerLetterText, /25-NOV-2026/);
-    assert.match(offerLetterText, /22,082\.19/);
-    assert.match(offerLetterText, /Interest for each period is calculated on the original principal/);
-    assert.doesNotMatch(offerLetterText, /attached repayment schedule/i);
-    assert.match(offerLetterXml, /w:orient="landscape"/);
-    assert.match(offerLetterXml, /w:w="16838" w:h="11906" w:orient="landscape"/);
-    assert.match(offerLetterXml, /w:w="15838"/);
-    assert.equal((offerLetterXml.match(/w:orient="landscape"/g) || []).length, 1);
-    assert.equal((offerLetterXml.match(/w:orient="portrait"/g) || []).length, 2);
-    assert.match(offerLetterXml, /w:bottom[^>]*w:color="000000"/);
+    const highestOfferRepayment = Math.max(...offerSchedule.installments.map((installment) => installment.total));
+    assert.ok(offerLetterText.includes(`Monthly Principal and interest ${money(highestOfferRepayment)}`));
+    const standardOfferBuffer = await createOfferLetterDetailsDocument({
+      ...samplePayload.customer,
+      approvedAmount: samplePayload.customer.recommendedAmount,
+      loanProduct: resolveLoanProduct(samplePayload.customer)
+    }, samplePayload.guarantors).toBuffer();
+    assert.equal(offerLetterText, await readDocumentText(standardOfferBuffer));
+    const simpleOfferBuffer = await createOfferLetterDetailsDocument(simpleOfferCustomer, simpleOfferGuarantors).toBuffer();
+    const simpleOfferText = await readDocumentText(simpleOfferBuffer);
+    const simpleOfferXml = await readDocumentXml(simpleOfferBuffer);
+    assert.match(simpleOfferText, /OFFER LETTER FOR OTHER MICRO LOAN/);
+    assert.match(simpleOfferText, /Ada Nwosu/);
+    assert.match(simpleOfferText, /12 Example Road, Lagos/);
+    assert.match(simpleOfferText, /Purpose:- business expansion/);
+    assert.match(simpleOfferText, /Amount approved:- ₦250,000\.00 \(Two Hundred Fifty Thousand Naira Only\)/);
+    assert.match(simpleOfferText, /Date: - 25th October, 2026/);
+    assert.match(simpleOfferText, /Dear Ma,/);
+    assert.match(simpleOfferText, /RE: APPLICATION FOR LOAN FACILITY OF \(₦250,000\.00\)/);
+    assert.match(simpleOfferText, /application dated on 20th October, 2026/);
+    assert.match(simpleOfferText, /Chika Obi 00123456789/);
+    assert.match(simpleOfferText, /Tunde Ayo 00987654321/);
+    assert.match(simpleOfferText, /Tenor:- 24 Months/);
+    assert.match(simpleOfferText, /Interest rate:- 26% Flat per Annum/);
+    assert.match(simpleOfferText, /Effective Date:- 25th November, 2026/);
+    assert.match(simpleOfferText, /Expiry Date:- 25th November, 2028/);
+    assert.match(simpleOfferText, /Management fee 1% \(₦2,500\.00\)/);
+    assert.match(simpleOfferText, /3% Mandatory Saving Deposit \(₦7,500\.00\)/);
+    assert.match(simpleOfferText, /Credit Bureau Report fee ₦1,000\.00/);
+    assert.match(simpleOfferText, /Monthly Principal and interest ₦15,937\.22/);
+    assert.match(simpleOfferText, /Grace Period/);
+    assert.match(simpleOfferText, /Insurance requirements \(where applicable\)/);
+    assert.match(simpleOfferText, /building collapse, fire, flood, natural disasters and vandalism where applicable\.\s*$/);
+    assert.match(simpleOfferXml, /w:rFonts w:ascii="Times New Roman"/);
+    assert.match(simpleOfferXml, /w:u w:val="single"/);
+    assert.doesNotMatch(simpleOfferText, /AUTHORISED SIGNATORY|CUSTOMER SIGNATORY/);
+    assert.doesNotMatch(simpleOfferText, /LOAN CALCULATION/);
+    const sharpOfferCustomer = {
+      ...simpleOfferCustomer,
+      loanAmount: 500000,
+      approvedAmount: 500000,
+      loanProduct: "Sharp Sharp",
+      durationMonths: 12
+    };
+    assert.equal(validateOfferLetterDetails(sharpOfferCustomer, simpleOfferGuarantors), "");
+    const sharpOfferBuffer = await createOfferLetterDetailsDocument(sharpOfferCustomer, simpleOfferGuarantors).toBuffer();
+    const sharpOfferText = await readDocumentText(sharpOfferBuffer);
+    const sharpOfferSchedule = calculateLoanSchedule(500000, 12, "Sharp Sharp", "2026-10-25");
+    const highestSharpRepayment = Math.max(...sharpOfferSchedule.installments.map((installment) => installment.total));
+    assert.match(sharpOfferText, /OFFER LETTER FOR SHARP SHARP/);
+    assert.match(sharpOfferText, /Interest rate:- 4% Flat per Annum/);
+    assert.match(sharpOfferText, /Credit Bureau Report fee ₦1,000\.00/);
+    assert.doesNotMatch(sharpOfferText, /Management fee 1%|3% Mandatory Saving Deposit|VAT 7\.5%/);
+    assert.ok(sharpOfferText.includes(`Monthly Principal and interest ${money(highestSharpRepayment)}`));
     const femalePayload = {
       ...samplePayload,
       customer: { ...samplePayload.customer, gender: "Female" }
@@ -405,7 +456,7 @@ function findTableXml(xml, text) {
     const femaleOfferLetterBuffer = await createLoanDocument(femalePayload, ["offer"]).toBuffer();
     const femaleOfferLetterText = await readDocumentText(femaleOfferLetterBuffer);
     assert.match(femaleOfferLetterText, /Dear Ma/);
-    assert.match(femaleOfferLetterText, /To enable her to complete building project/);
+    assert.match(femaleOfferLetterText, /Purpose:- complete building project/);
     const femaleAppraisalBuffer = await createLoanDocument(femalePayload, ["appraisal"]).toBuffer();
     const femaleAppraisalText = await readDocumentText(femaleAppraisalBuffer);
     assert.match(femaleAppraisalText, /Her BVN is/);
@@ -454,13 +505,13 @@ function findTableXml(xml, text) {
     const allTemplatesBuffer = await createLoanDocument(samplePayload, ["appraisal", "offer", "keyfact"]).toBuffer();
     const allTemplatesXml = await readDocumentXml(allTemplatesBuffer);
     assert.equal((allTemplatesXml.match(/w:type="page"/g) || []).length, 1);
-    assert.match(allTemplatesXml, /w:orient="landscape"/);
+    assert.doesNotMatch(allTemplatesXml, /w:orient="landscape"/);
     assert.match(allTemplatesXml, /w:color w:val="000000"/);
     assert.match(allTemplatesXml, /w:bottom[^>]*w:color="000000"/);
     const circStandaloneBuffer = await createLoanDocument(samplePayload, ["appraisal", "circ", "offer", "keyfact"]).toBuffer();
     const circStandaloneXml = await readDocumentXml(circStandaloneBuffer);
     assert.equal((circStandaloneXml.match(/w:type="page"/g) || []).length, 1);
-    assert.match(circStandaloneXml, /w:orient="landscape"/);
+    assert.doesNotMatch(circStandaloneXml, /w:orient="landscape"/);
     console.log("Sample document generation successful.");
   } catch (error) {
     console.error("Sample document generation failed:", error.message || error);
